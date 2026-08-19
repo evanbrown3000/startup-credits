@@ -5,6 +5,10 @@ on:
     branches: [main]
     paths:
       - 'automation/mcpmarket/trigger-1124.txt'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'automation/mcpmarket/trigger-1124.txt'
 
 permissions:
   contents: write
