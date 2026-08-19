@@ -24,7 +24,6 @@ jobs:
     env:
       PROVIDER_EMAIL: evanbrown.engineering+mcpmarket20260819@gmail.com
       PROVIDER_NAME: Evan Brown
-      PROVIDER_SEED: ${{ secrets.CM_TARGET_PAT }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -41,10 +40,6 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p automation/mcpmarket
-          if [ -z "${PROVIDER_SEED:-}" ]; then
-            printf '%s\n' '{"status":"missing_repo_secret","provider":"mcpmarket","provider_mutation":false}' > automation/mcpmarket/result.json
-            exit 0
-          fi
           node <<'NODE'
           const { chromium } = require('playwright');
           const crypto = require('crypto');
@@ -52,9 +47,7 @@ jobs:
           (async () => {
             const email = process.env.PROVIDER_EMAIL;
             const name = process.env.PROVIDER_NAME;
-            const seed = process.env.PROVIDER_SEED;
-            const raw = crypto.createHmac('sha256', seed).update('mcpmarket-seller-20260819-v1').digest('base64url');
-            const password = `Mm!${raw.slice(0,22)}9a`;
+            const password = `Mm!${crypto.randomBytes(24).toString('base64url')}9a`;
             fs.writeFileSync('/tmp/mcpmarket-password', password, { mode: 0o600 });
             const browser = await chromium.launch({headless:true});
             const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
