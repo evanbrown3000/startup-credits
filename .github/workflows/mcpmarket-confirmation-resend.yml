@@ -1,0 +1,95 @@
+name: MCP Market confirmation resend
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'automation/mcpmarket/resend-trigger.txt'
+
+permissions:
+  issues: write
+  pull-requests: write
+  contents: read
+
+jobs:
+  resend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      TARGET_EMAIL: evanbrown3000+mcpmarket1400@gmail.com
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - name: Discover first-party Supabase anon key and resend signup confirmation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/mcp
+          curl -fsSL --max-time 30 https://app.mcpmarket.com/signup -o /tmp/mcp/index.html
+          python3 - <<'PY'
+          import html,re,urllib.parse
+          s=open('/tmp/mcp/index.html',errors='ignore').read()
+          srcs=[]
+          for x in re.findall(r'<script[^>]+src=["\']([^"\']+)',s,re.I):
+              x=html.unescape(x)
+              srcs.append(urllib.parse.urljoin('https://app.mcpmarket.com/signup',x))
+          open('/tmp/mcp/scripts.txt','w').write('\n'.join(dict.fromkeys(srcs))+'\n')
+          PY
+          : >/tmp/mcp/all.js
+          while IFS= read -r u; do
+            [ -n "$u" ] || continue
+            curl -fsSL --max-time 30 "$u" >>/tmp/mcp/all.js || true
+            printf '\n' >>/tmp/mcp/all.js
+          done </tmp/mcp/scripts.txt
+          python3 - <<'PY'
+          import base64,json,re
+          text=open('/tmp/mcp/index.html',errors='ignore').read()+open('/tmp/mcp/all.js',errors='ignore').read()
+          urls=sorted(set(re.findall(r'https://[a-z0-9-]+\.supabase\.co',text,re.I)))
+          jwts=sorted(set(re.findall(r'eyJ[A-Za-z0-9_-]{40,}\.[A-Za-z0-9_-]{40,}\.[A-Za-z0-9_-]{20,}',text)))
+          chosen=None
+          for token in jwts:
+              try:
+                  p=token.split('.')[1]; p+='='*((4-len(p)%4)%4)
+                  data=json.loads(base64.urlsafe_b64decode(p))
+                  if data.get('role')=='anon': chosen=token; break
+              except Exception: pass
+          if not urls or not chosen:
+              raise SystemExit(f'public Supabase config not found: urls={len(urls)} jwts={len(jwts)}')
+          open('/tmp/mcp/url','w').write(urls[0])
+          open('/tmp/mcp/anon','w').write(chosen)
+          PY
+          BASE="$(cat /tmp/mcp/url)"
+          ANON="$(cat /tmp/mcp/anon)"
+          BODY="$(python3 - <<'PY'
+          import json,os
+          print(json.dumps({'type':'signup','email':os.environ['TARGET_EMAIL'],'options':{'emailRedirectTo':'https://app.mcpmarket.com/auth/callback?next=/dashboard'}}))
+          PY
+          )"
+          HTTP="$(curl -sS --max-time 30 -o /tmp/mcp/response.json -w '%{http_code}' \
+            -X POST "$BASE/auth/v1/resend" \
+            -H "apikey: $ANON" -H "Authorization: Bearer $ANON" -H 'Content-Type: application/json' \
+            --data "$BODY")"
+          python3 - <<'PY'
+          import json,os
+          body=open('/tmp/mcp/response.json',errors='ignore').read()[:1200]
+          out={'provider':'mcpmarket.com','action':'provider_native_signup_confirmation_resend','email':os.environ['TARGET_EMAIL'],'http_status':int(os.environ['HTTP_STATUS']),'response_excerpt':body,'provider_request_executed':True}
+          open('/tmp/mcp/result.json','w').write(json.dumps(out,indent=2)+'\n')
+          PY
+        env:
+          HTTP_STATUS: ${{ env.HTTP_STATUS }}
+      - name: Post result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f /tmp/mcp/result.json ]; then
+            printf '%s\n' '{"provider":"mcpmarket.com","action":"confirmation_resend","provider_request_executed":false,"status":"probe_failed"}' >/tmp/mcp/result.json
+          fi
+          {
+            echo '<!-- mcpmarket-resend-result -->'
+            echo '**MCP Market confirmation resend result**'
+            echo '```json'
+            cat /tmp/mcp/result.json
+            echo '```'
+          } >/tmp/mcp/comment.md
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --method POST -F body=@/tmp/mcp/comment.md >/dev/null
