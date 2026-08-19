@@ -1,0 +1,18 @@
+name: Preserve active MCP Market publisher
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'automation/mcpmarket/preserve-active-trigger.txt'
+
+concurrency:
+  group: mcpmarket-interactive-publisher
+  cancel-in-progress: false
+
+jobs:
+  preserve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - run: echo 'Active publication flight preserved; duplicate pending flight replaced.'
