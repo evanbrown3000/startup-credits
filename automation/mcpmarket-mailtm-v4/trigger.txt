@@ -1,0 +1,6 @@
+triggered_at=2026-08-19T15:00:00-05:00
+provider=mcpmarket.com
+product=Provider Reality Check
+price_usd=19
+mode=syntax-checked-account-confirm-onboard-publish
+host_dependency=false
