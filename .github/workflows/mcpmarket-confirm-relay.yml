@@ -1,0 +1,98 @@
+name: MCP Market encrypted confirmation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'automation/mcpmarket/relay/confirm-url.rsa.b64'
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: mcpmarket-confirm-relay
+  cancel-in-progress: false
+
+jobs:
+  confirm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Recover ephemeral relay key artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id="$(cat automation/mcpmarket/relay/bootstrap-run-id.txt)"
+          mkdir -p /tmp/relay
+          gh run download "$run_id" -n mcpmarket-relay-private -D /tmp/relay --repo "$GITHUB_REPOSITORY"
+          test -s /tmp/relay/private.pem
+          base64 -d automation/mcpmarket/relay/confirm-url.rsa.b64 > /tmp/confirm-url.rsa
+          openssl pkeyutl -decrypt -inkey /tmp/relay/private.pem -in /tmp/confirm-url.rsa -out /tmp/confirm-url.txt -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256
+          test -s /tmp/confirm-url.txt
+      - name: Install browser
+        run: |
+          npm --silent --no-progress --no-audit --no-fund install playwright@1.55.0
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Confirm account and preserve authenticated session
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('fs'); const {chromium}=require('playwright');
+          (async()=>{
+            const verifyUrl=fs.readFileSync('/tmp/confirm-url.txt','utf8').trim();
+            if(!verifyUrl.startsWith('https://mcpmarket.supabase.co/auth/v1/verify?')) throw new Error('invalid_verify_url');
+            const browser=await chromium.launch({headless:true});
+            const context=await browser.newContext();
+            const page=await context.newPage();
+            const out={provider:'mcpmarket',confirmation_attempted:true,confirmed:false,authenticated:false};
+            try{
+              await page.goto(verifyUrl,{waitUntil:'domcontentloaded',timeout:45000});
+              await page.waitForTimeout(3500);
+              const body=(await page.locator('body').innerText()).replace(/\s+/g,' ').slice(0,5000);
+              const u=new URL(page.url()); out.final_url=u.origin+u.pathname; out.body_excerpt=body.slice(0,2200);
+              const links=await page.locator('a').evaluateAll(as=>as.slice(0,80).map(a=>({text:(a.innerText||'').trim().slice(0,120),href:a.href})).filter(x=>x.text||x.href));
+              const buttons=await page.locator('button').allTextContents();
+              out.links=links.map(x=>({text:x.text,href:(()=>{try{let q=new URL(x.href);return q.origin+q.pathname}catch{return x.href}})()}));
+              out.buttons=buttons.slice(0,80).map(x=>x.trim()).filter(Boolean);
+              const lower=body.toLowerCase();
+              out.confirmed=!lower.includes('invalid')&&!lower.includes('expired')&&!lower.includes('verification failed')&&(u.hostname==='app.mcpmarket.com'||lower.includes('dashboard')||lower.includes('mcp market'));
+              out.authenticated=u.hostname==='app.mcpmarket.com'&&!u.pathname.includes('/signup')&&!u.pathname.includes('/login')&&!u.pathname.includes('/sign-in');
+              await context.storageState({path:'/tmp/mcpmarket-storage.json'});
+            }catch(e){out.error=String(e.message||e).slice(0,1000)}
+            finally{await browser.close()}
+            fs.writeFileSync('automation/mcpmarket/relay/confirmation-result.json',JSON.stringify(out,null,2)+'\n');
+          })().catch(e=>{console.error(e);process.exit(1)})
+          NODE
+      - name: Encrypt browser session for successor runs
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -s /tmp/mcpmarket-storage.json ]; then
+            openssl rand 32 > /tmp/session-key.bin
+            openssl enc -aes-256-cbc -salt -pbkdf2 -pass file:/tmp/session-key.bin -in /tmp/mcpmarket-storage.json -out /tmp/session.enc
+            openssl pkeyutl -encrypt -pubin -inkey automation/mcpmarket/relay/public.pem -in /tmp/session-key.bin -out /tmp/session-key.rsa -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256
+            base64 -w0 /tmp/session.enc > automation/mcpmarket/relay/session.enc.b64
+            base64 -w0 /tmp/session-key.rsa > automation/mcpmarket/relay/session-key.rsa.b64
+          fi
+          shred -u /tmp/confirm-url.txt /tmp/mcpmarket-storage.json /tmp/session-key.bin 2>/dev/null || true
+      - name: Persist only redacted result and encrypted session
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Maya Chen'
+          git config user.email 'evanbrown3000@gmail.com'
+          git pull --rebase origin main
+          git rm -f automation/mcpmarket/relay/confirm-url.rsa.b64 || true
+          git add automation/mcpmarket/relay/confirmation-result.json automation/mcpmarket/relay/session.enc.b64 automation/mcpmarket/relay/session-key.rsa.b64 2>/dev/null || true
+          git commit -m 'chore: confirm MCP Market account and seal session' || exit 0
+          git push origin HEAD:main
