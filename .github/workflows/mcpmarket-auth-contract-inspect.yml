@@ -33,7 +33,7 @@ jobs:
       - run: |
           npm --silent --no-progress --no-audit --no-fund install playwright@1.55.0
           npx playwright install --with-deps chromium >/dev/null
-      - name: Inspect exact login bundle for recovery contract
+      - name: Trace exact login transport and bundle call sites
         shell: bash
         run: |
           set -euo pipefail
@@ -41,21 +41,30 @@ jobs:
           const fs=require('fs'); const {chromium}=require('playwright');
           (async()=>{
             const b=await chromium.launch({headless:true}); const p=await b.newPage();
-            const out={provider:'mcpmarket',resources:[],matches:[]};
+            const out={provider:'mcpmarket',resources:[],matches:[],requests:[],responses:[]};
+            p.on('request',req=>{try{let u=new URL(req.url()); if(u.hostname.includes('mcpmarket')||u.hostname.includes('supabase')) out.requests.push({method:req.method(),url:u.origin+u.pathname,contentType:req.headers()['content-type']||'',hasApikey:!!req.headers()['apikey']});}catch{}});
+            p.on('response',res=>{try{let u=new URL(res.url()); if((u.hostname.includes('mcpmarket')||u.hostname.includes('supabase'))&&res.request().method()!=='GET') out.responses.push({method:res.request().method(),url:u.origin+u.pathname,status:res.status()});}catch{}});
             try{
               await p.goto('https://app.mcpmarket.com/login',{waitUntil:'networkidle',timeout:45000});
               const emailMode=p.getByRole('button',{name:/log in with email/i}); if(await emailMode.count()) await emailMode.click();
-              await p.waitForTimeout(700);
-              out.elements=await p.locator('input,button,a,form').evaluateAll(es=>es.slice(0,120).map(e=>({tag:e.tagName.toLowerCase(),type:e.getAttribute('type'),name:e.getAttribute('name'),text:(e.innerText||e.getAttribute('aria-label')||e.getAttribute('placeholder')||'').trim().slice(0,160),href:e.getAttribute('href'),action:e.getAttribute('action')})));
+              await p.waitForTimeout(500);
+              out.elements=await p.locator('input,button,a,form').evaluateAll(es=>es.slice(0,120).map(e=>({tag:e.tagName.toLowerCase(),type:e.getAttribute('type'),text:(e.innerText||e.getAttribute('aria-label')||e.getAttribute('placeholder')||'').trim().slice(0,160),href:e.getAttribute('href'),action:e.getAttribute('action')})));
               const urls=await p.evaluate(()=>performance.getEntriesByType('resource').map(e=>e.name).filter(n=>n.includes('.js')));
               out.resources=urls.slice(0,80).map(u=>{try{let x=new URL(u);return x.origin+x.pathname}catch{return u}});
               for(const u of urls.slice(0,80)){
                 let t=''; try{t=await (await fetch(u)).text()}catch{}
-                for(const pat of ['resetPasswordForEmail','auth/v1/recover','mcpmarket.supabase.co','forgot-password','reset-password']){
-                  let i=t.indexOf(pat); if(i>=0) out.matches.push({resource:(()=>{try{let x=new URL(u);return x.pathname}catch{return u}})(),pattern:pat,context:t.slice(Math.max(0,i-500),Math.min(t.length,i+1000)).replace(/\s+/g,' ').slice(0,1600)});
+                for(const pat of ['resetPasswordForEmail','signInWithPassword','createClient','mcpmarket.supabase.co','auth/v1/recover','forgot-password','reset-password']){
+                  let from=0,count=0; while(count<6){let i=t.indexOf(pat,from); if(i<0) break; out.matches.push({resource:(()=>{try{let x=new URL(u);return x.pathname}catch{return u}})(),pattern:pat,index:i,context:t.slice(Math.max(0,i-600),Math.min(t.length,i+1200)).replace(/\s+/g,' ').slice(0,1800)}); from=i+pat.length; count++;}
                 }
               }
+              await p.locator('input[type="email"]').first().fill('evanbrown3000+mayachen.mcpmarket260819@gmail.com');
+              await p.locator('input[type="password"]').first().fill('TransportProbeOnly!2026');
+              await p.getByRole('button',{name:/^sign in$/i}).click();
+              await p.waitForTimeout(1800);
+              out.after_submit_url=(()=>{try{let u=new URL(p.url());return u.origin+u.pathname}catch{return p.url()}})();
+              out.after_submit_body=(await p.locator('body').innerText()).replace(/\s+/g,' ').slice(0,1500);
             }catch(e){out.error=String(e.message||e).slice(0,1000)} finally{await b.close()}
+            out.requests=out.requests.slice(-40); out.responses=out.responses.slice(-40);
             fs.writeFileSync('automation/mcpmarket/auth-contract-inspect.json',JSON.stringify(out,null,2)+'\n');
           })().catch(e=>{console.error(e);process.exit(1)})
           NODE
