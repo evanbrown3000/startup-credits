@@ -1,0 +1,8 @@
+{
+  "source_created_at": "2026-08-19T10:51:00-05:00",
+  "half_hour_candidates": 0,
+  "deadline_fit_longer_horizon": 20,
+  "payout_latency_unknown": 1,
+  "prompt_exfiltration_exclusions": 31,
+  "security_exclusions": 48
+}
