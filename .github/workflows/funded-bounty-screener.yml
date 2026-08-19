@@ -1,0 +1,29 @@
+name: Funded bounty screener
+
+on:
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+  push:
+    paths:
+      - 'automation/bounty_screener/**'
+      - '.github/workflows/funded-bounty-screener.yml'
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: funded-bounty-screener
+  cancel-in-progress: false
+
+jobs:
+  screen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run bounded screener
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 automation/bounty_screener/screen.py
