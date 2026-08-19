@@ -14,8 +14,7 @@ on:
       - '.github/workflows/funded-bounty-screener.yml'
 
 permissions:
-  contents: read
-  issues: write
+  contents: write
 
 concurrency:
   group: funded-bounty-screener-${{ github.ref }}
@@ -27,7 +26,50 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: Run bounded screener
+      - name: Run bounded screener and persist rolling report
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python3 automation/bounty_screener/screen.py
+        run: |
+          python3 - <<'PY'
+          import base64
+          import importlib.util
+          import json
+          import os
+          import urllib.error
+          import urllib.parse
+          from pathlib import Path
+
+          source = Path('automation/bounty_screener/screen.py')
+          spec = importlib.util.spec_from_file_location('bounty_screen', source)
+          mod = importlib.util.module_from_spec(spec)
+          assert spec and spec.loader
+          spec.loader.exec_module(mod)
+          report_path = 'automation/bounty_screener/latest.md'
+
+          def persist_report(body: str):
+              Path(report_path).write_text(body + '\n', encoding='utf-8')
+              if os.environ.get('GITHUB_EVENT_NAME') == 'pull_request':
+                  return 'dry-run://automation/bounty_screener/latest.md'
+              owner, repo = os.environ['GITHUB_REPOSITORY'].split('/', 1)
+              endpoint = f"/repos/{owner}/{repo}/contents/{urllib.parse.quote(report_path, safe='/')}"
+              sha = None
+              try:
+                  current = mod.request(endpoint)
+                  if isinstance(current, dict):
+                      sha = current.get('sha')
+              except urllib.error.HTTPError as exc:
+                  if exc.code != 404:
+                      raise
+              payload = {
+                  'message': 'Refresh automated funded-bounty report',
+                  'content': base64.b64encode((body + '\n').encode()).decode(),
+                  'branch': 'main',
+              }
+              if sha:
+                  payload['sha'] = sha
+              result = mod.request(endpoint, 'PUT', payload)
+              return ((result or {}).get('content') or {}).get('html_url') or 'repo-report-updated'
+
+          mod.upsert_report = persist_report
+          mod.main()
+          PY
