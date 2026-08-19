@@ -1,4 +1,6 @@
-triggered_at=2026-08-19T11:35:00-05:00
-owner=chatgpt-current-coordination-income-20260819T1121CT
+triggered_at=2026-08-19T18:25:30-05:00
+owner=Maya Chen / chatgpt-current-income-20260819T1823CT
 provider=mcpmarket.com
-mode=isolated-cloud-zero-spend
+mode=isolated-cloud-zero-spend-accessible-mailbox
+serialization=mcpmarket-seller-1124
+email=evanbrown3000+mayachen.mcpmarket260819@gmail.com
