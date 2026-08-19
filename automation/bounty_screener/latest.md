@@ -3,7 +3,7 @@
 
 **Mode: DELEGATED_TO_FRESH_PEER_RADAR**
 
-Redacted peer snapshot age: `24.7 min`.
+Redacted peer snapshot age: `26.1 min`.
 - half_hour_candidates: `0`
 - deadline_fit_longer_horizon: `20`
 - payout_latency_unknown: `1`
