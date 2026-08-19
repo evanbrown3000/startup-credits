@@ -1,0 +1,125 @@
+name: AgenticTrade public successor 20260819
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'agentictrade/trigger-20260819.txt'
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      PROVIDER_EMAIL: 'evanbronitski@gmail.com'
+      PROVIDER_NAME: 'Cognilode'
+      SERVICE_NAME: 'Cognilode Repository Intake Risk Catalog'
+      SERVICE_BASE: 'https://raw.githubusercontent.com/evanbrown3000/startup-credits/agentictrade-static-v1/agentictrade'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Prepare recoverable custody
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          command -v age >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq age; }
+          curl -fsSL https://github.com/evanbrown3000.keys -o /tmp/evan.keys
+          test -s /tmp/evan.keys
+          mkdir -p /tmp/agentictrade-custody
+          printf 'custody-preflight' >/tmp/preflight.txt
+          age -R /tmp/evan.keys -o /tmp/preflight.age /tmp/preflight.txt
+          rm -f /tmp/preflight.txt /tmp/preflight.age
+      - name: Discover idempotently then publish if absent
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import http.cookiejar, html, json, os, re, secrets, subprocess, urllib.error, urllib.parse, urllib.request, datetime, pathlib
+          BASE='https://agentictrade.io'; OUT=pathlib.Path('/tmp/agentictrade-custody'); OUT.mkdir(exist_ok=True)
+          EMAIL=os.environ['PROVIDER_EMAIL']; NAME=os.environ['SERVICE_NAME']; SERVICE_BASE=os.environ['SERVICE_BASE']
+          jar=http.cookiejar.CookieJar(); opener=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+          ev={'provider':'AgenticTrade','service_name':NAME,'started_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'income_usdc':0.0}
+          def req(r,timeout=25):
+              try:
+                  x=opener.open(r,timeout=timeout); return x.getcode(),x.geturl(),x.read().decode('utf-8','replace'),dict(x.headers)
+              except urllib.error.HTTPError as e:return e.code,e.geturl(),e.read().decode('utf-8','replace'),dict(e.headers)
+          def get(url):return req(urllib.request.Request(url,headers={'User-Agent':'Cognilode-AgenticTrade-Successor/2.0','Accept':'application/json,text/html'}))
+          def form(url,data):return req(urllib.request.Request(url,data=urllib.parse.urlencode(data).encode(),headers={'Content-Type':'application/x-www-form-urlencoded','User-Agent':'Cognilode-AgenticTrade-Successor/2.0'},method='POST'))
+          def api(method,path,data=None,token=None):
+              body=None if data is None else json.dumps(data).encode(); h={'Accept':'application/json','User-Agent':'Cognilode-AgenticTrade-Successor/2.0'}
+              if data is not None:h['Content-Type']='application/json'
+              if token:h['Authorization']='Bearer '+token
+              st,u,raw,headers=req(urllib.request.Request(BASE+path,data=body,headers=h,method=method))
+              try:o=json.loads(raw)
+              except:o={'raw':raw[:2000]}
+              return st,o
+          def discover():
+              st,o=api('GET','/api/v1/services?query='+urllib.parse.quote(NAME)+'&limit=100'); arr=[]
+              if isinstance(o,list):arr=o
+              elif isinstance(o,dict):
+                  for k in ('services','items','results','data'):
+                      if isinstance(o.get(k),list):arr=o[k];break
+              m=[x for x in arr if isinstance(x,dict) and (x.get('name') or '').strip()==NAME]
+              return st,m
+          def csrf(page):
+              m=re.search(r'name=["\']csrf_token["\'][^>]*value=["\']([^"\']+)',page,re.I) or re.search(r'value=["\']([^"\']+)["\'][^>]*name=["\']csrf_token["\']',page,re.I)
+              if not m:raise RuntimeError('csrf token not found')
+              return html.unescape(m.group(1))
+          def seal(label,text):
+              p=OUT/(label+'.txt');p.write_text(text);e=OUT/(label+'.age');subprocess.run(['age','-R','/tmp/evan.keys','-o',str(e),str(p)],check=True);p.unlink();return e.name
+          st,m=discover();ev['preflight_discovery_status']=st;ev['preflight_exact_matches']=len(m)
+          if m:
+              ev.update({'already_public':True,'service_id':m[0].get('id'),'published':True,'terminal':'already_public','provider_account_created_this_run':False,'service_created_this_run':False})
+              (OUT/'redacted.json').write_text(json.dumps(ev,indent=2,sort_keys=True)+'\n');raise SystemExit(0)
+          password='Cg!'+secrets.token_urlsafe(28)
+          st,url,page,_=get(BASE+'/portal/register');ev['register_get']={'status':st,'url':url}
+          if st>=400:
+              ev['terminal']='register_get_failed';(OUT/'redacted.json').write_text(json.dumps(ev,indent=2,sort_keys=True)+'\n');raise SystemExit(0)
+          tok=csrf(page);st,url,page,_=form(BASE+'/portal/register',{'email':EMAIL,'password':password,'confirm_password':password,'display_name':os.environ['PROVIDER_NAME'],'csrf_token':tok,'ref_code':'','promo_code':''})
+          low=page.lower();dash=('Provider Dashboard' in page or '/portal/dashboard' in url);ev['register_post']={'status':st,'url':url,'dashboard_seen':dash,'account_exists_signal':('already' in low and ('account' in low or 'email' in low))}
+          if not dash:
+              st2,m2=discover();ev['post_register_discovery_status']=st2;ev['post_register_exact_matches']=len(m2)
+              if m2:ev.update({'already_public':True,'service_id':m2[0].get('id'),'published':True,'terminal':'late_existing_public_service'})
+              else:ev['terminal']='existing_or_unestablished_account_no_public_service'
+              (OUT/'redacted.json').write_text(json.dumps(ev,indent=2,sort_keys=True)+'\n');raise SystemExit(0)
+          ev['provider_account_created_this_run']=True;ev['password_custody']=seal('provider-password',password)
+          st,url,settings,_=get(BASE+'/portal/settings');ev['settings_get']={'status':st,'url':url};tok2=csrf(settings)
+          st,url,patpage,_=form(BASE+'/portal/api-token',{'csrf_token':tok2});ev['pat_post']={'status':st,'url':url};mm=re.search(r'(pat_[A-Za-z0-9_-]+:[A-Za-z0-9_-]+)',html.unescape(patpage))
+          if not mm:
+              ev['terminal']='provider_created_pat_not_recoverable';(OUT/'redacted.json').write_text(json.dumps(ev,indent=2,sort_keys=True)+'\n');raise SystemExit(0)
+          pat=mm.group(1);print('::add-mask::'+pat);ev['pat_created']=True;ev['pat_custody']=seal('provider-pat',pat)
+          payload={'name':NAME,'description':'Machine-readable repository intake risk catalog for AI agents. Call GET path /agent-repository-intake-risk-catalog.json. Flags credential harvesting, destructive defaults, autonomous-spend risk, unbounded shell/resource behavior, secret logging, browser-session risk, supply-chain provenance, and returns bounded dispositions.','endpoint':SERVICE_BASE,'price_per_call':'0.01','category':'security','tags':['security','repository','agent-safety','preflight'],'payment_method':'x402','free_tier_calls':0}
+          sst,svc=api('POST','/api/v1/services',payload,pat);ev['service_registration_status']=sst
+          if isinstance(svc,dict):ev['service_registration_response']={k:v for k,v in svc.items() if k not in ('secret','token','api_key','password')}
+          ev['service_id']=svc.get('id') if isinstance(svc,dict) else None;ev['service_created_this_run']=sst in (200,201)
+          dst,dm=discover();ev['public_discovery_status']=dst;ev['public_exact_matches']=len(dm)
+          pst,prov=api('GET','/api/v1/provider/dashboard',token=pat);est,earn=api('GET','/api/v1/provider/earnings',token=pat);ev['provider_dashboard_status']=pst;ev['earnings_status']=est
+          if isinstance(prov,dict):ev['provider_dashboard']=prov
+          if isinstance(earn,dict):ev['earnings']=earn
+          ev['published']=bool(dm and sst in (200,201));ev['terminal']='published' if ev['published'] else 'service_not_public_after_registration'
+          (OUT/'redacted.json').write_text(json.dumps(ev,indent=2,sort_keys=True)+'\n')
+          PY
+      - name: Commit redacted result to public carrier
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p agentictrade
+          if [[ -s /tmp/agentictrade-custody/redacted.json ]]; then cp /tmp/agentictrade-custody/redacted.json agentictrade/result-20260819.json; else printf '{"provider":"AgenticTrade","terminal":"carrier_ended_before_result"}\n' > agentictrade/result-20260819.json; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add agentictrade/result-20260819.json
+          git diff --cached --quiet || git commit -m 'Publish AgenticTrade successor redacted result'
+          git push
+      - name: Upload encrypted custody
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentictrade-successor-${{ github.run_id }}
+          path: |
+            /tmp/agentictrade-custody/*.age
+            /tmp/agentictrade-custody/redacted.json
+          retention-days: 30
+          if-no-files-found: warn
