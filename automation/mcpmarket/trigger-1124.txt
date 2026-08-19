@@ -1,4 +1,5 @@
-triggered_at=2026-08-19T11:35:00-05:00
+triggered_at=2026-08-19T11:43:30-05:00
 owner=chatgpt-current-coordination-income-20260819T1121CT
 provider=mcpmarket.com
-mode=isolated-cloud-zero-spend
+mode=isolated-cloud-zero-spend-pr-observable
+serialization=mcpmarket-seller-1124
