@@ -1,0 +1,107 @@
+name: MCP Market confirmation resend v2
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'automation/mcpmarket-resend-v2/trigger.txt'
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  resend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      TARGET_EMAIL: evanbrown3000+mcpmarket1400@gmail.com
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - name: Extract live public Supabase config and resend once
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/mcp
+          curl -fsSL --max-time 30 https://app.mcpmarket.com/signup -o /tmp/mcp/index.html
+          python3 - <<'PY'
+          import html,re,urllib.parse
+          s=open('/tmp/mcp/index.html',errors='ignore').read()
+          urls=[]
+          for src in re.findall(r'<script[^>]+src=["\']([^"\']+)',s,re.I):
+              urls.append(urllib.parse.urljoin('https://app.mcpmarket.com/signup',html.unescape(src)))
+          open('/tmp/mcp/scripts.txt','w').write('\n'.join(dict.fromkeys(urls))+'\n')
+          PY
+          : >/tmp/mcp/all.js
+          while IFS= read -r url; do
+            [ -n "$url" ] || continue
+            curl -fsSL --max-time 30 "$url" >>/tmp/mcp/all.js || true
+            printf '\n' >>/tmp/mcp/all.js
+          done </tmp/mcp/scripts.txt
+          python3 - <<'PY'
+          import base64,json,re
+          text=open('/tmp/mcp/index.html',errors='ignore').read()+open('/tmp/mcp/all.js',errors='ignore').read()
+          urls=sorted(set(re.findall(r'https://[a-z0-9-]+\.supabase\.co',text,re.I)))
+          publishable=sorted(set(re.findall(r'sb_publishable_[A-Za-z0-9_-]{20,}',text)))
+          anon_new=sorted(set(re.findall(r'sb_anon_[A-Za-z0-9_-]{20,}',text)))
+          jwts=sorted(set(re.findall(r'eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}',text)))
+          jwt_anon=[]
+          for token in jwts:
+              try:
+                  p=token.split('.')[1];p+='='*((4-len(p)%4)%4)
+                  if json.loads(base64.urlsafe_b64decode(p)).get('role')=='anon':jwt_anon.append(token)
+              except Exception: pass
+          keys=publishable+anon_new+jwt_anon
+          if not urls or not keys:
+              open('/tmp/mcp/discovery.json','w').write(json.dumps({'supabase_urls':len(urls),'publishable_keys':len(publishable),'new_anon_keys':len(anon_new),'jwt_anon_keys':len(jwt_anon)},indent=2)+'\n')
+              raise SystemExit('live public Supabase key not found')
+          open('/tmp/mcp/base','w').write(urls[0])
+          open('/tmp/mcp/key','w').write(keys[0])
+          open('/tmp/mcp/discovery.json','w').write(json.dumps({'supabase_urls':len(urls),'publishable_keys':len(publishable),'new_anon_keys':len(anon_new),'jwt_anon_keys':len(jwt_anon),'selected_key_type':'publishable' if publishable else ('anon_new' if anon_new else 'jwt_anon')},indent=2)+'\n')
+          PY
+          BASE="$(cat /tmp/mcp/base)"
+          KEY="$(cat /tmp/mcp/key)"
+          REQUEST="$(python3 - <<'PY'
+          import json,os
+          print(json.dumps({'type':'signup','email':os.environ['TARGET_EMAIL'],'options':{'emailRedirectTo':'https://app.mcpmarket.com/auth/callback?next=/dashboard'}}))
+          PY
+          )"
+          HTTP_STATUS="$(curl -sS --max-time 30 -o /tmp/mcp/response.json -w '%{http_code}' \
+            -X POST "$BASE/auth/v1/resend" \
+            -H "apikey: $KEY" \
+            -H "Authorization: Bearer $KEY" \
+            -H 'Content-Type: application/json' \
+            --data "$REQUEST")"
+          export HTTP_STATUS
+          python3 - <<'PY'
+          import json,os
+          discovery=json.load(open('/tmp/mcp/discovery.json'))
+          excerpt=open('/tmp/mcp/response.json',errors='ignore').read()[:1200]
+          out={'provider':'mcpmarket.com','action':'provider_native_signup_confirmation_resend','email':os.environ['TARGET_EMAIL'],'http_status':int(os.environ['HTTP_STATUS']),'response_excerpt':excerpt,'provider_request_executed':True,'public_config':discovery}
+          open('/tmp/mcp/result.json','w').write(json.dumps(out,indent=2)+'\n')
+          PY
+      - name: Post exact result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f /tmp/mcp/result.json ]; then
+            python3 - <<'PY'
+          import json,os
+          d={'provider':'mcpmarket.com','action':'confirmation_resend','provider_request_executed':False,'status':'public_config_or_request_failed'}
+          try:d['public_config']=json.load(open('/tmp/mcp/discovery.json'))
+          except Exception:pass
+          open('/tmp/mcp-result.json','w').write(json.dumps(d,indent=2)+'\n')
+          PY
+            cp /tmp/mcp-result.json /tmp/mcp/result.json
+          fi
+          {
+            echo '<!-- mcpmarket-resend-v2-result -->'
+            echo '**MCP Market confirmation resend v2 — terminal result**'
+            echo '```json'
+            cat /tmp/mcp/result.json
+            echo '```'
+          } >/tmp/mcp/comment.md
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --method POST -F body=@/tmp/mcp/comment.md >/dev/null
