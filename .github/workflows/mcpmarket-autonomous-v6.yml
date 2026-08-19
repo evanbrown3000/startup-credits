@@ -22,7 +22,7 @@ permissions:
 
 concurrency:
   group: mcpmarket-title-verified-v6
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   publish:
