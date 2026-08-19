@@ -1,0 +1,25 @@
+name: Cancel obsolete MCP Market flights
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cancel:
+    if: github.event.issue.pull_request && github.event.comment.body == '/cancel-obsolete-mcpmarket-runs-32298779048-32298779050'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Cancel only obsolete v3 and v5 runs
+        shell: bash
+        run: |
+          set -euo pipefail
+          for run_id in 32298779048 32298779050; do
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/cancel" || true
+          done
