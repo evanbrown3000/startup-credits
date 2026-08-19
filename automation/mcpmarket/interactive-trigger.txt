@@ -1,0 +1,4 @@
+triggered_at=2026-08-19T13:59:00-05:00
+provider=mcpmarket.com
+account_email=evanbrown3000+mcpmarket1359@gmail.com
+mode=encrypted-interactive-cloud-publish

@@ -1,0 +1,4 @@
+triggered_at=2026-08-19T14:13:00-05:00
+provider=mcpmarket.com
+mode=encrypted-interactive-preinstalled-chrome-only
+supersedes_slow_workflow=true
