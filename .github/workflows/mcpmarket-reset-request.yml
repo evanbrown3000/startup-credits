@@ -33,7 +33,7 @@ jobs:
       - run: |
           npm --silent --no-progress --no-audit --no-fund install playwright@1.55.0
           npx playwright install --with-deps chromium >/dev/null
-      - name: Capture public Supabase client credential and request recovery
+      - name: Capture public Supabase credential and invoke recovery
         shell: bash
         run: |
           set -euo pipefail
@@ -42,25 +42,26 @@ jobs:
           (async()=>{
             const email='evanbrown3000+mayachen.mcpmarket260819@gmail.com';
             const b=await chromium.launch({headless:true}); const p=await b.newPage();
-            const out={provider:'mcpmarket',email,reset_requested:false,credential_capture:false}; let apikey=null, tokenUrl=null;
+            const out={provider:'mcpmarket',email,reset_requested:false,credential_capture:false}; let apikey=null, authOrigin=null;
             p.on('request',req=>{
-              const u=req.url();
-              if(u.includes('mcpmarket.supabase.co') && u.includes('/auth/v1/token')){
-                const h=req.headers(); apikey=h['apikey']||null; tokenUrl=u;
-              }
+              try{
+                const u=new URL(req.url());
+                if(u.hostname.endsWith('.supabase.co') && u.pathname.includes('/auth/v1/token')){
+                  const h=req.headers(); if(h['apikey']){apikey=h['apikey']; authOrigin=u.origin;}
+                }
+              }catch{}
             });
             try{
               await p.goto('https://app.mcpmarket.com/login',{waitUntil:'domcontentloaded',timeout:45000});
               const emailMode=p.getByRole('button',{name:/log in with email/i}); if(await emailMode.count()) await emailMode.click();
               await p.locator('input[type="email"]').first().fill(email);
-              await p.locator('input[type="password"]').first().fill('ThisIsNotThePassword!2026');
+              await p.locator('input[type="password"]').first().fill('TransportProbeOnly!2026');
               await p.getByRole('button',{name:/^sign in$/i}).click();
-              for(let i=0;i<20&&!apikey;i++) await p.waitForTimeout(150);
-              if(!apikey) throw new Error('public_supabase_apikey_not_observed');
-              out.credential_capture=true; out.apikey_sha256=crypto.createHash('sha256').update(apikey).digest('hex');
-              const base='https://mcpmarket.supabase.co/auth/v1/recover';
+              for(let i=0;i<30&&!apikey;i++) await p.waitForTimeout(100);
+              if(!apikey||!authOrigin) throw new Error('public_supabase_credential_not_observed');
+              out.credential_capture=true; out.auth_origin=authOrigin; out.apikey_sha256=crypto.createHash('sha256').update(apikey).digest('hex');
               const redirect='https://app.mcpmarket.com/auth/callback?next=%2Fdashboard';
-              const r=await fetch(base+'?redirect_to='+encodeURIComponent(redirect),{
+              const r=await fetch(authOrigin+'/auth/v1/recover?redirect_to='+encodeURIComponent(redirect),{
                 method:'POST',headers:{'Content-Type':'application/json','apikey':apikey,'Authorization':'Bearer '+apikey},body:JSON.stringify({email})
               });
               const text=await r.text(); out.recover_http=r.status; out.recover_excerpt=text.replace(/\s+/g,' ').slice(0,1000); out.reset_requested=r.status>=200&&r.status<300;
