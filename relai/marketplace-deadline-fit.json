@@ -1,0 +1,76 @@
+{
+  "schema_version": "1.0",
+  "product": "Marketplace Deadline-Fit Matrix",
+  "as_of_date": "2026-08-19",
+  "target_deadline": "2026-08-31",
+  "currency_basis": "USD or USD-equivalent stablecoin",
+  "purpose": "Machine-readable screening data for selecting digital/API marketplaces when time-to-usable-proceeds matters as much as listing cost and seller share.",
+  "methodology": {
+    "deadline_fit_rule": "PASS only when known provider-controlled holding/review latency does not itself exceed the target deadline; CONDITIONAL when a separate onboarding or origin-hosting dependency can dominate; FAIL when a documented provider hold exceeds the deadline.",
+    "income_rule": "Publication, a payment-required response, a listing, or an invoice is not treated as realized income without an independent buyer transaction producing accessible proceeds.",
+    "unknowns": "Unknown provider terms remain explicit instead of being converted into optimistic defaults."
+  },
+  "records": [
+    {
+      "provider": "RelAI",
+      "marketplace": "RelAI x402 API Marketplace",
+      "seller_setup": "Autonomous wallet-signature bootstrap can provision a service key without dashboard or JWT.",
+      "upfront_listing_cost_usd": 0,
+      "settlement_rail": "USDC via x402 to merchant wallet",
+      "settlement_latency": "Provider describes instant/sub-second-to-seconds settlement depending on network.",
+      "service_availability": "Registered API is immediately usable through the RelAI relay.",
+      "public_marketplace_discovery": "Provider says public marketplace review typically takes 24-48 hours after registration.",
+      "deadline_fit": "PASS_FOR_DIRECT_RELAY__MARKETPLACE_DISCOVERY_DELAY_24_48H",
+      "source_refs": [
+        "https://relai.fi/documentation/management-api",
+        "https://relai.fi/blog/monetize-your-api-in-5-minutes",
+        "https://relai.fi/"
+      ]
+    },
+    {
+      "provider": "Vertical Marketplace",
+      "marketplace": "Vertical Marketplace by Vermarco",
+      "seller_setup": "Agent registration yields an API key; seller registration requires a delivery endpoint and Stripe Connect onboarding.",
+      "upfront_listing_cost_usd": 0,
+      "marketplace_fee_pct": 5,
+      "seller_keep_pct": 95,
+      "settlement_rail": "Stripe Connect for seller payouts; x402 supported for per-query buyer settlement.",
+      "deadline_fit": "CONDITIONAL_ON_STRIPE_CONNECT_AND_DELIVERY_ENDPOINT",
+      "source_refs": [
+        "https://verticalmarketplace.ai/docs"
+      ]
+    },
+    {
+      "provider": "Zyla API Hub",
+      "marketplace": "Zyla API Hub",
+      "seller_setup": "Self-serve provider signup and free API upload.",
+      "upfront_listing_cost_usd": 0,
+      "seller_keep_pct": 80,
+      "documented_minimum_days_before_payout_request": 60,
+      "deadline_fit": "FAIL_FOR_2026_08_31",
+      "reason": "The documented minimum payout-request wait exceeds the target deadline even if a buyer pays immediately.",
+      "source_refs": [
+        "https://www.zylalabs.com/monetize-your-api"
+      ]
+    },
+    {
+      "provider": "Swarmwage",
+      "marketplace": "Swarmwage capability registry",
+      "seller_setup": "Open registry; seller runs an x402-compatible capability endpoint and publishes its descriptor.",
+      "protocol_fee_pct": 0,
+      "settlement_rail": "Direct peer-to-peer USDC on Base via x402/EIP-3009",
+      "seller_dependency": "Requires a live seller endpoint and dedicated wallet configuration.",
+      "deadline_fit": "CONDITIONAL_ON_EXISTING_PUBLIC_ENDPOINT",
+      "source_refs": [
+        "https://swarmwage.com/",
+        "https://github.com/Swarmwage/swarmwage"
+      ]
+    }
+  ],
+  "selection_notes": [
+    "A zero listing fee is insufficient when payout is held beyond the business deadline.",
+    "Native discovery is insufficient when seller onboarding requires an unresolved payment-account step.",
+    "Direct wallet settlement can reduce payout latency, but buyer demand remains an independent variable.",
+    "Verify provider terms again immediately before committing implementation time because marketplace policies change."
+  ]
+}
