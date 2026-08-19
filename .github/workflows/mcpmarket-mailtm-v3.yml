@@ -1,0 +1,100 @@
+name: MCP Market onboarding-aware publication v3
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'automation/mcpmarket-mailtm-v3/trigger.txt'
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: mcpmarket-mailtm-v3-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Use preinstalled Chrome and open encrypted input channel
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --silent --no-progress --no-audit --no-fund install playwright-core@1.55.0
+          CHROME_PATH="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
+          test -x "$CHROME_PATH"
+          echo "CHROME_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
+          node --check .github/scripts/mcpmarket-mailtm-v3.js
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -subj '/CN=mcpmarket-mailtm-v3' \
+            -keyout /tmp/channel-key.pem -out /tmp/channel-cert.pem >/dev/null 2>&1
+          CERT_B64="$(base64 -w0 /tmp/channel-cert.pem)"
+          {
+            echo '<!-- mcpmarket-mailtm-v3-cert -->'
+            echo '**MCP Market v3 encrypted input channel**'
+            echo '```text'
+            echo "$CERT_B64"
+            echo '```'
+          } >/tmp/cert-comment.md
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --method POST -F body=@/tmp/cert-comment.md >/dev/null
+      - name: Receive encrypted credentials and product
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f /tmp/input.cms.b64
+          for _ in $(seq 1 90); do
+            gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" >/tmp/comments.json
+            if python3 - <<'PY'
+          import json,re,sys
+          comments=json.load(open('/tmp/comments.json'))
+          bodies=[c.get('body','') for c in comments if '<!-- mcpmarket-mailtm-v3-input -->' in c.get('body','')]
+          if not bodies: sys.exit(1)
+          m=re.search(r'<!-- mcpmarket-mailtm-v3-input -->\s*```(?:text)?\s*([A-Za-z0-9+/=\r\n]+?)\s*```',bodies[-1],re.S)
+          if not m: sys.exit(1)
+          open('/tmp/input.cms.b64','w').write(''.join(m.group(1).split()))
+          PY
+            then break; fi
+            sleep 5
+          done
+          test -s /tmp/input.cms.b64
+          base64 -d /tmp/input.cms.b64 >/tmp/input.cms
+          openssl cms -decrypt -binary -inform DER -in /tmp/input.cms \
+            -recip /tmp/channel-cert.pem -inkey /tmp/channel-key.pem -out /tmp/input.json
+          python3 - <<'PY'
+          import base64,json,os
+          p=json.load(open('/tmp/input.json'))
+          for k in ('mailbox_password','provider_password','skill_md_b64','title','description','price'):
+              if not p.get(k): raise SystemExit('missing '+k)
+          os.makedirs('/tmp/product',exist_ok=True)
+          open('/tmp/product/SKILL.md','wb').write(base64.b64decode(p['skill_md_b64']))
+          PY
+      - name: Create, confirm, onboard, and publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/scripts/mcpmarket-mailtm-v3.js
+      - name: Post exact terminal result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f /tmp/result.json || printf '%s\n' '{"provider":"mcpmarket.com","status":"result_missing","listing_published":false,"income":0}' >/tmp/result.json
+          {
+            echo '<!-- mcpmarket-mailtm-v3-terminal -->'
+            echo '**MCP Market onboarding-aware v3 — terminal result**'
+            echo '```json'
+            cat /tmp/result.json
+            echo '```'
+          } >/tmp/comment.md
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --method POST -F body=@/tmp/comment.md >/dev/null
