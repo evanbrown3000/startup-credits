@@ -1,0 +1,105 @@
+name: Maya Chen Nostr social launch 1832
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'automation/social/maya-chen-nostr-trigger.txt'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: maya-chen-nostr-1832
+  cancel-in-progress: false
+
+jobs:
+  launch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Publish Nostr identity and first post
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p automation/social
+          npm --silent --no-progress --no-audit --no-fund install nostr-tools@2 ws@8
+          node <<'NODE'
+          const fs = require('fs')
+          const {generateSecretKey, getPublicKey, finalizeEvent, nip19} = require('nostr-tools')
+          const WebSocket = require('ws')
+          const sk = generateSecretKey()
+          const pk = getPublicKey(sk)
+          const npub = nip19.npubEncode(pk)
+          const nsec = nip19.nsecEncode(sk)
+          fs.writeFileSync('/tmp/maya-chen-nsec', nsec, {mode:0o600})
+          const created_at = Math.floor(Date.now()/1000)
+          const profile = finalizeEvent({
+            kind:0,
+            created_at,
+            tags:[],
+            content:JSON.stringify({
+              name:'Maya Chen',
+              display_name:'Maya Chen',
+              about:'Practical digital tools, small-business experiments, and what actually works. Building in public.',
+              website:'https://cognilode.com'
+            })
+          }, sk)
+          const note = finalizeEvent({
+            kind:1,
+            created_at:created_at+1,
+            tags:[['r','https://cognilode.com']],
+            content:'Building practical digital tools and small-business experiments in public. I care about what actually works, not hype. https://cognilode.com'
+          }, sk)
+          const relays=['wss://relay.damus.io','wss://nos.lol','wss://relay.primal.net']
+          function pubRelay(url, events){
+            return new Promise(resolve=>{
+              const ws=new WebSocket(url,{handshakeTimeout:10000})
+              const ok={}; let done=false
+              const finish=(extra={})=>{if(done)return;done=true;try{ws.close()}catch{};resolve({url,ok,...extra})}
+              const timer=setTimeout(()=>finish({timeout:true}),15000)
+              ws.on('open',()=>{for(const e of events) ws.send(JSON.stringify(['EVENT',e]))})
+              ws.on('message',buf=>{
+                try{const m=JSON.parse(buf.toString()); if(m[0]==='OK'){ok[m[1]]={accepted:!!m[2],message:m[3]||''}; if(Object.keys(ok).length>=events.length){clearTimeout(timer);finish()}}}catch{}
+              })
+              ws.on('error',e=>{clearTimeout(timer);finish({error:String(e.message||e)})})
+              ws.on('close',()=>{clearTimeout(timer);finish()})
+            })
+          }
+          ;(async()=>{
+            const results=[]
+            for(const r of relays) results.push(await pubRelay(r,[profile,note]))
+            const accepted=results.filter(x=>x.ok?.[profile.id]?.accepted && x.ok?.[note.id]?.accepted).map(x=>x.url)
+            const out={provider:'nostr',name:'Maya Chen',npub,pubkey:pk,profile_event_id:profile.id,post_event_id:note.id,accepted_relays:accepted,relay_results:results,profile_published:accepted.length>0,post_published:accepted.length>0,website:'https://cognilode.com'}
+            fs.writeFileSync('automation/social/maya-chen-nostr-result.json',JSON.stringify(out,null,2)+'\n')
+            if(!accepted.length) process.exitCode=2
+          })()
+          NODE
+      - name: Encrypt Nostr private key custody
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f /tmp/maya-chen-nsec ]; then
+            sudo apt-get update -qq >/dev/null
+            sudo apt-get install -y age >/dev/null
+            curl -fsSL https://github.com/evanbrown3000.keys -o /tmp/recipients.txt
+            age -R /tmp/recipients.txt -a -o automation/social/maya-chen-nostr-nsec.age /tmp/maya-chen-nsec
+            shred -u /tmp/maya-chen-nsec || rm -f /tmp/maya-chen-nsec
+          fi
+      - name: Persist public social identity and encrypted custody
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Maya Chen'
+          git config user.email 'evanbrown3000@gmail.com'
+          git pull --rebase origin main
+          git add automation/social/maya-chen-nostr-result.json automation/social/maya-chen-nostr-nsec.age 2>/dev/null || true
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'feat: publish Maya Chen Nostr identity'
+          git push origin HEAD:main
