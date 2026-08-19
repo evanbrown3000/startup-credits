@@ -1,0 +1,13 @@
+{
+  "provider": "bluesky",
+  "handle": "maya-chen-tools-260819.bsky.social",
+  "email": "evanbrown3000+maya.chen.bsky260819@gmail.com",
+  "created": false,
+  "profile_written": false,
+  "post_created": false,
+  "create_http": 400,
+  "create_response": {
+    "error": "InvalidPhoneVerification",
+    "message": "Verification is now required on this server. Please make sure you're using the latest version of the Bluesky app."
+  }
+}
