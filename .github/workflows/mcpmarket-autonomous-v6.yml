@@ -7,6 +7,13 @@ on:
       - 'automation/mcpmarket-v6/trigger.txt'
       - 'automation/mcpmarket-v6/publisher.js.gz.b64.part-*'
       - 'automation/mcpmarket-v3/product/**'
+  push:
+    branches:
+      - 'agent/mcpmarket-v3-1500'
+    paths:
+      - 'automation/mcpmarket-v6/trigger.txt'
+      - 'automation/mcpmarket-v6/publisher.js.gz.b64.part-*'
+      - 'automation/mcpmarket-v3/product/**'
 
 permissions:
   contents: read
@@ -23,7 +30,7 @@ jobs:
     timeout-minutes: 18
     env:
       GH_TOKEN: ${{ github.token }}
-      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_NUMBER: ${{ github.event.pull_request.number || '10' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
