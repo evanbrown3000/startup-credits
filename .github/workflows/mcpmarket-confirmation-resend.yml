@@ -65,18 +65,17 @@ jobs:
           print(json.dumps({'type':'signup','email':os.environ['TARGET_EMAIL'],'options':{'emailRedirectTo':'https://app.mcpmarket.com/auth/callback?next=/dashboard'}}))
           PY
           )"
-          HTTP="$(curl -sS --max-time 30 -o /tmp/mcp/response.json -w '%{http_code}' \
+          HTTP_STATUS="$(curl -sS --max-time 30 -o /tmp/mcp/response.json -w '%{http_code}' \
             -X POST "$BASE/auth/v1/resend" \
             -H "apikey: $ANON" -H "Authorization: Bearer $ANON" -H 'Content-Type: application/json' \
             --data "$BODY")"
+          export HTTP_STATUS
           python3 - <<'PY'
           import json,os
           body=open('/tmp/mcp/response.json',errors='ignore').read()[:1200]
           out={'provider':'mcpmarket.com','action':'provider_native_signup_confirmation_resend','email':os.environ['TARGET_EMAIL'],'http_status':int(os.environ['HTTP_STATUS']),'response_excerpt':body,'provider_request_executed':True}
           open('/tmp/mcp/result.json','w').write(json.dumps(out,indent=2)+'\n')
           PY
-        env:
-          HTTP_STATUS: ${{ env.HTTP_STATUS }}
       - name: Post result
         if: always()
         shell: bash
