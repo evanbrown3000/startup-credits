@@ -1,0 +1,21 @@
+{
+  "schema": "cognilode.agent-repository-intake-risk-catalog.v1",
+  "updated_at": "2026-08-19T15:36:00Z",
+  "purpose": "Machine-readable preflight catalog for AI agents deciding whether unfamiliar repositories are safe and economical to clone, build, or execute.",
+  "rules": [
+    {"id":"credential-harvest","severity":"critical","signal":"requests private keys, seed phrases, browser cookies, session tokens, or unrelated cloud credentials","disposition":"reject"},
+    {"id":"unbounded-shell","severity":"high","signal":"install or bootstrap path executes remote shell content without pinning or inspection","disposition":"isolate"},
+    {"id":"recursive-resource-risk","severity":"high","signal":"default commands perform unbounded recursive scans, builds, or crawls","disposition":"bound-before-run"},
+    {"id":"autonomous-spend","severity":"critical","signal":"code can purchase, trade, stake, bridge, or create billable cloud resources without an explicit scoped gate","disposition":"reject-or-disable"},
+    {"id":"network-side-effects","severity":"high","signal":"tests or startup routines mutate external providers, send messages, or publish content","disposition":"sandbox-and-disable"},
+    {"id":"secret-log-risk","severity":"critical","signal":"debug or CI paths print environment variables, authorization headers, wallets, or API responses containing credentials","disposition":"reject-until-redacted"},
+    {"id":"dependency-install-surface","severity":"medium","signal":"unpinned dependencies or lifecycle scripts execute during install","disposition":"inspect-lock-and-scripts"},
+    {"id":"browser-automation-surface","severity":"high","signal":"automation attaches to an existing human browser/profile or persistent authenticated session","disposition":"use-isolated-profile"},
+    {"id":"supply-chain-provenance","severity":"high","signal":"downloaded binaries/models/assets lack authoritative source or integrity evidence","disposition":"verify-before-execute"},
+    {"id":"destructive-default","severity":"critical","signal":"cleanup, migration, or reset commands delete data or alter remote state by default","disposition":"reject-or-rewrite"}
+  ],
+  "output_contract": {
+    "recommended_fields": ["rule_id","observed_evidence","confidence","disposition","bounded_next_action"],
+    "principle": "Treat absence of evidence as unknown, not safe; distinguish source presence from executed side effects."
+  }
+}
