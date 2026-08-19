@@ -24,8 +24,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
-      PROVIDER_EMAIL: evanbrown.engineering+mcpmarket20260819@gmail.com
-      PROVIDER_NAME: Evan Brown
+      PROVIDER_EMAIL: evanbrown3000+mayachen.mcpmarket260819@gmail.com
+      PROVIDER_NAME: Maya Chen
     steps:
       - uses: actions/checkout@v4
         with:
@@ -53,14 +53,12 @@ jobs:
             fs.writeFileSync('/tmp/mcpmarket-password', password, { mode: 0o600 });
             const browser = await chromium.launch({headless:true});
             const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
-            const out = {provider:'mcpmarket', email, provider_mutation:false, created:false, needs_email_confirmation:false, status:'unknown'};
+            const out = {provider:'mcpmarket', email, name, provider_mutation:false, created:false, needs_email_confirmation:false, status:'unknown'};
             try {
               await page.goto('https://app.mcpmarket.com/signup', { waitUntil: 'domcontentloaded', timeout: 45000 });
               const emailButton = page.getByRole('button', { name: /sign up with email/i });
               await emailButton.click({ timeout: 15000 });
               await page.waitForTimeout(500);
-              const labels = await page.locator('label').allTextContents().catch(()=>[]);
-              const placeholders = await page.locator('input').evaluateAll(els => els.map(e => ({name:e.name,type:e.type,placeholder:e.placeholder,autocomplete:e.autocomplete})));
               async function fillFirst(candidates, value) {
                 for (const loc of candidates) {
                   try { if (await loc.count()) { await loc.first().fill(value); return true; } } catch(e) {}
@@ -70,7 +68,7 @@ jobs:
               const nameOk = await fillFirst([page.getByLabel(/name/i), page.locator('input[name="name"]'), page.locator('input[autocomplete="name"]')], name);
               const emailOk = await fillFirst([page.getByLabel(/email/i), page.locator('input[type="email"]'), page.locator('input[name="email"]')], email);
               const passOk = await fillFirst([page.getByLabel(/password/i), page.locator('input[type="password"]'), page.locator('input[name="password"]')], password);
-              out.form = {nameOk,emailOk,passOk,labels,placeholders};
+              out.form = {nameOk,emailOk,passOk};
               if (!emailOk || !passOk) throw new Error('signup_fields_not_found');
               const submit = page.getByRole('button', { name: /create account|sign up|continue/i });
               await submit.last().click({ timeout: 15000 });
@@ -134,7 +132,7 @@ jobs:
         run: |
           set -euo pipefail
           git config user.name 'cognilode-provider-carrier'
-          git config user.email 'evanbrown.engineering@gmail.com'
+          git config user.email 'evanbrown3000@gmail.com'
           git pull --rebase origin main
           git add automation/mcpmarket/result.json automation/mcpmarket/password.age 2>/dev/null || true
           if git diff --cached --quiet; then exit 0; fi
