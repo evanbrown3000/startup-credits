@@ -44,6 +44,7 @@ offers:
         value: P1Y
       kind: discount
       percentage:
+        kind: exact
         basis_points: 5000
   eligibility:
     rule:
