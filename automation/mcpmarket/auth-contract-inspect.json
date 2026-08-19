@@ -1,0 +1,95 @@
+{
+  "provider": "mcpmarket",
+  "resources": [
+    "https://app.mcpmarket.com/_next/static/chunks/00jxl-shluvi-.js",
+    "https://app.mcpmarket.com/_next/static/chunks/1s7p6viodrie1.js",
+    "https://app.mcpmarket.com/_next/static/chunks/1whhtsmc7depc.js",
+    "https://app.mcpmarket.com/_next/static/chunks/3n5bfmgxivfaf.js",
+    "https://app.mcpmarket.com/_next/static/chunks/11ilgkmdhe3u0.js",
+    "https://app.mcpmarket.com/_next/static/chunks/1vp7zfwivakra.js",
+    "https://app.mcpmarket.com/_next/static/chunks/3uq_5v7bvkygu.js",
+    "https://app.mcpmarket.com/_next/static/chunks/turbopack-02105603n6jed.js",
+    "https://app.mcpmarket.com/_next/static/chunks/43md9btydhi08.js",
+    "https://app.mcpmarket.com/_next/static/chunks/35pp68dkk1ylt.js",
+    "https://app.mcpmarket.com/_next/static/chunks/3e4t4pv1-7k6h.js",
+    "https://app.mcpmarket.com/_next/static/chunks/22hl0szooojmz.js",
+    "https://app.mcpmarket.com/_next/static/chunks/15x3g6jcoswt0.js",
+    "https://app.mcpmarket.com/_next/static/chunks/0j3_o-9_iiohp.js",
+    "https://app.mcpmarket.com/_next/static/chunks/31wad22kre1ct.js",
+    "https://app.mcpmarket.com/_next/static/chunks/35q6c3oda8l1l.js",
+    "https://app.mcpmarket.com/_next/static/chunks/37o58ii-fomv1.js"
+  ],
+  "matches": [
+    {
+      "resource": "/_next/static/chunks/37o58ii-fomv1.js",
+      "pattern": "resetPasswordForEmail",
+      "context": "lSession(t)})})(),{data:{subscription:r}}}async _emitInitialSession(e){return await this._useSession(async t=>{var r,s;try{let{data:{session:s},error:i}=t;if(i)throw i;await (null==(r=this.stateChangeEmitters.get(e))?void 0:r.callback(\"INITIAL_SESSION\",s)),this._debug(\"INITIAL_SESSION\",\"callback id\",e,\"session\",s)}catch(t){await (null==(s=this.stateChangeEmitters.get(e))?void 0:s.callback(\"INITIAL_SESSION\",null)),this._debug(\"INITIAL_SESSION\",\"callback id\",e,\"error\",t),console.error(t)}})}async resetPasswordForEmail(e,t={}){let r=null,s=null;\"pkce\"===this.flowType&&([r,s]=await ez(this.storage,this.storageKey,!0));try{return await e2(this.fetch,\"POST\",`${this.url}/recover`,{body:{email:e,code_challenge:r,code_challenge_method:s,gotrue_meta_security:{captcha_token:t.captchaToken}},headers:this.headers,redirectTo:t.redirectTo})}catch(e){if(await eB(this.storage,`${this.storageKey}-code-verifier`),eh(e))return this._returnResult({data:null,error:e});throw e}}async getUserIdentities(){var e;try{let{data:t,error:r}=await this.getUser();if(r)throw r;return this._returnResult({data:{identities:null!=(e=t.user.identities)?e:[]},error:null})}catch(e){if(eh(e))return this._returnResult({data:null,error:e});throw e}}async linkIdentity(e){return\"token\"in e?this.linkIdentityIdToken(e):this.linkIdentityOAuth(e)}async linkIdentityOAuth(e){var t;try{let{data:r,error:s}=await this._useSession(async t=>{var r,s,i,a,n;let{data:o,error:l}=t;if(l)throw l;let u=await this._getUrlForProvider(`${thi"
+    }
+  ],
+  "elements": [
+    {
+      "tag": "a",
+      "type": null,
+      "name": null,
+      "text": "MCP\nMarket\nHUB",
+      "href": "/",
+      "action": null
+    },
+    {
+      "tag": "button",
+      "type": "button",
+      "name": null,
+      "text": "Continue with GitHub",
+      "href": null,
+      "action": null
+    },
+    {
+      "tag": "button",
+      "type": "button",
+      "name": null,
+      "text": "Continue with Google",
+      "href": null,
+      "action": null
+    },
+    {
+      "tag": "form",
+      "type": null,
+      "name": null,
+      "text": "Email\nPassword\nSign in",
+      "href": null,
+      "action": null
+    },
+    {
+      "tag": "input",
+      "type": "email",
+      "name": null,
+      "text": "you@example.com",
+      "href": null,
+      "action": null
+    },
+    {
+      "tag": "input",
+      "type": "password",
+      "name": null,
+      "text": "",
+      "href": null,
+      "action": null
+    },
+    {
+      "tag": "button",
+      "type": "submit",
+      "name": null,
+      "text": "Sign in",
+      "href": null,
+      "action": null
+    },
+    {
+      "tag": "a",
+      "type": null,
+      "name": null,
+      "text": "Sign up",
+      "href": "/signup",
+      "action": null
+    }
+  ]
+}
