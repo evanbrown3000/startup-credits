@@ -8,13 +8,17 @@ on:
     paths:
       - 'automation/bounty_screener/**'
       - '.github/workflows/funded-bounty-screener.yml'
+  pull_request:
+    paths:
+      - 'automation/bounty_screener/**'
+      - '.github/workflows/funded-bounty-screener.yml'
 
 permissions:
   contents: read
   issues: write
 
 concurrency:
-  group: funded-bounty-screener
+  group: funded-bounty-screener-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
