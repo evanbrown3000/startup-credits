@@ -5,9 +5,15 @@ on:
     branches: [main]
     paths:
       - 'automation/mcpmarket/reset-trigger.txt'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'automation/mcpmarket/reset-trigger.txt'
 
 permissions:
   contents: write
+  issues: write
+  pull-requests: write
 
 concurrency:
   group: mcpmarket-reset-request
@@ -19,6 +25,8 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -38,22 +46,30 @@ jobs:
             try{
               await p.goto('https://app.mcpmarket.com/login',{waitUntil:'domcontentloaded',timeout:45000});
               const emailMode=p.getByRole('button',{name:/log in with email/i}); if(await emailMode.count()) await emailMode.click();
-              await p.waitForTimeout(500);
-              const body1=(await p.locator('body').innerText()).replace(/\s+/g,' ');
-              out.login_excerpt=body1.slice(0,1800);
+              await p.waitForTimeout(700);
+              const body1=(await p.locator('body').innerText()).replace(/\s+/g,' '); out.login_excerpt=body1.slice(0,1800);
               const forgot=p.getByText(/forgot.*password|reset.*password/i); if(await forgot.count()) await forgot.first().click();
-              else { const a=p.locator('a').filter({hasText:/forgot|reset/i}); if(await a.count()) await a.first().click(); }
-              await p.waitForTimeout(500);
+              else {const a=p.locator('a').filter({hasText:/forgot|reset/i}); if(await a.count()) await a.first().click();}
+              await p.waitForTimeout(700);
               const emailInput=p.locator('input[type="email"]'); if(await emailInput.count()) await emailInput.first().fill(email); else throw new Error('email_input_missing');
               const submit=p.getByRole('button',{name:/send|reset|continue|email/i}); if(await submit.count()) await submit.last().click(); else throw new Error('reset_submit_missing');
-              await p.waitForTimeout(2000);
-              const body=(await p.locator('body').innerText()).replace(/\s+/g,' ');
-              out.final_url=(()=>{try{let u=new URL(p.url());return u.origin+u.pathname}catch{return p.url()}})(); out.body_excerpt=body.slice(0,2000);
+              await p.waitForTimeout(2200);
+              const body=(await p.locator('body').innerText()).replace(/\s+/g,' '); const u=new URL(p.url()); out.final_url=u.origin+u.pathname; out.body_excerpt=body.slice(0,2000);
               const low=body.toLowerCase(); out.reset_requested=low.includes('email')&&(low.includes('sent')||low.includes('check')||low.includes('reset'));
             }catch(e){out.error=String(e.message||e).slice(0,1000)} finally{await b.close()}
             fs.writeFileSync('automation/mcpmarket/reset-result.json',JSON.stringify(out,null,2)+'\n');
           })().catch(e=>{console.error(e);process.exit(1)})
           NODE
+      - name: Publish observable PR result
+        if: always() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f automation/mcpmarket/reset-result.json || printf '%s\n' '{"provider":"mcpmarket","reset_requested":false,"status":"result_missing"}' > automation/mcpmarket/reset-result.json
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --method POST -f body="$(cat automation/mcpmarket/reset-result.json)"
       - name: Persist reset request result
         if: always()
         shell: bash
