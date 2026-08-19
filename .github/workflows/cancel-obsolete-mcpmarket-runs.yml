@@ -10,16 +10,20 @@ permissions:
 
 jobs:
   cancel:
-    if: github.event.issue.pull_request && github.event.comment.body == '/cancel-obsolete-mcpmarket-runs-32298779048-32298779050'
+    if: github.event.issue.pull_request && github.actor == github.repository_owner && startsWith(github.event.comment.body, '/cancel-mcpmarket-runs ')
     runs-on: ubuntu-latest
     timeout-minutes: 2
     env:
       GH_TOKEN: ${{ github.token }}
+      COMMAND: ${{ github.event.comment.body }}
     steps:
-      - name: Cancel only obsolete v3 and v5 runs
+      - name: Cancel only explicitly named obsolete runs
         shell: bash
         run: |
           set -euo pipefail
-          for run_id in 32298779048 32298779050; do
+          read -r verb run_ids <<< "$COMMAND"
+          test "$verb" = "/cancel-mcpmarket-runs"
+          for run_id in $run_ids; do
+            [[ "$run_id" =~ ^[0-9]+$ ]]
             gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/cancel" || true
           done
