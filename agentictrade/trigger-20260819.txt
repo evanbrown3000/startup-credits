@@ -1,0 +1,7 @@
+triggered_at_ct=2026-08-19T11:18:00-05:00
+service=Cognilode Repository Intake Risk Catalog
+price_usdc_per_call=0.01
+preflight_exact_discovery=true
+same_provider_email=true
+recoverable_custody=age
+spend_usd=0
