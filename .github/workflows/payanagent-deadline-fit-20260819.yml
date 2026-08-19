@@ -1,0 +1,69 @@
+name: PayanAgent Deadline-Fit Publisher
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: payanagent-deadline-fit-20260819
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: payanagent-deadline-fit-v1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Register seller and publish one paid offer
+        id: publish
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save --package-lock=false ethers@6 >/dev/null 2>&1
+          export OUTDIR="$RUNNER_TEMP/payanagent-out"
+          node payanagent/publish.mjs
+
+      - name: Encrypt any created provider custody
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUTDIR="$RUNNER_TEMP/payanagent-out"
+          mkdir -p "$OUTDIR"
+          if [ -f "$OUTDIR/credentials.json" ]; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq age >/dev/null
+            curl -fsSL https://github.com/evanbrown3000.keys | grep -E '^ssh-(ed25519|rsa) ' > "$RUNNER_TEMP/recipients.txt"
+            test -s "$RUNNER_TEMP/recipients.txt"
+            age -R "$RUNNER_TEMP/recipients.txt" -o "$OUTDIR/credentials.age" "$OUTDIR/credentials.json"
+            rm -f "$OUTDIR/credentials.json" "$RUNNER_TEMP/recipients.txt"
+          fi
+
+      - name: Upload terminal redacted state and encrypted custody
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: payanagent-deadline-fit-result
+          path: |
+            ${{ runner.temp }}/payanagent-out/result.json
+            ${{ runner.temp }}/payanagent-out/credentials.age
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Require externally visible paid gate
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e '.paid_gate_live == true and .public_offer_verified == true and .offer_created == true' "$RUNNER_TEMP/payanagent-out/result.json" >/dev/null
