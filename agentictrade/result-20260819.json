@@ -1,0 +1,56 @@
+{
+  "earnings": {
+    "pending_settlement": 0.0,
+    "settlements": [],
+    "total_earned": 0.0,
+    "total_settled": 0.0
+  },
+  "earnings_status": 200,
+  "income_usdc": 0.0,
+  "password_custody": "provider-password.age",
+  "pat_created": true,
+  "pat_custody": "provider-pat.age",
+  "pat_post": {
+    "status": 200,
+    "url": "https://agentictrade.io/portal/api-token"
+  },
+  "preflight_discovery_status": 200,
+  "preflight_exact_matches": 0,
+  "provider": "AgenticTrade",
+  "provider_account_created_this_run": true,
+  "provider_dashboard": {
+    "pending_settlement": 0.0,
+    "provider_id": "09e098e0-1926-4b2a-a5a4-a2d65a82bf29",
+    "total_calls": 0,
+    "total_revenue": 0.0,
+    "total_services": 0,
+    "total_settled": 0.0
+  },
+  "provider_dashboard_status": 200,
+  "public_discovery_status": 200,
+  "public_exact_matches": 0,
+  "published": false,
+  "register_get": {
+    "status": 200,
+    "url": "https://agentictrade.io/portal/register"
+  },
+  "register_post": {
+    "account_exists_signal": false,
+    "dashboard_seen": true,
+    "status": 200,
+    "url": "https://agentictrade.io/portal/dashboard"
+  },
+  "service_created_this_run": false,
+  "service_id": null,
+  "service_name": "Cognilode Repository Intake Risk Catalog",
+  "service_registration_response": {
+    "error": "provider_email_required: Provider must register a valid email before listing services. POST your email to /api/v1/provider-contact {\"email\": \"you@example.com\"} first, then retry."
+  },
+  "service_registration_status": 422,
+  "settings_get": {
+    "status": 200,
+    "url": "https://agentictrade.io/portal/settings"
+  },
+  "started_at": "2026-08-19T16:22:49.380458+00:00",
+  "terminal": "service_not_public_after_registration"
+}
