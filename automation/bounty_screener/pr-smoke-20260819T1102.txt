@@ -1,0 +1,2 @@
+2026-08-19T11:02:00-05:00
+Observable same-repo PR smoke for the already-installed public bounty fallback.
