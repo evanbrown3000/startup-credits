@@ -1,0 +1,23 @@
+{
+  "provider": "mcpmarket",
+  "confirmation_attempted": true,
+  "confirmed": true,
+  "authenticated": false,
+  "final_url": "https://app.mcpmarket.com/login",
+  "body_excerpt": "MCP Market HUB Welcome back Sign-in could not be completed. Please try again. Continue with GitHub Continue with Google OR CONTINUE WITH Log in with Email Don't have an account? Sign up MCP Market HUB Discover and deploy MCP servers with one click",
+  "links": [
+    {
+      "text": "MCP\nMarket\nHUB",
+      "href": "https://app.mcpmarket.com/"
+    },
+    {
+      "text": "Sign up",
+      "href": "https://app.mcpmarket.com/signup"
+    }
+  ],
+  "buttons": [
+    "Continue with GitHub",
+    "Continue with Google",
+    "Log in with Email"
+  ]
+}
