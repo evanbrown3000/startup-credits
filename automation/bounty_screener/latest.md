@@ -2,7 +2,7 @@
 # Funded bounty screener — rolling state
 
 **Mode: INDEPENDENT_FALLBACK — peer lease stale/missing.**
-Last scan: `2026-08-19T17:47:13+00:00`
+Last scan: `2026-08-19T18:13:08+00:00`
 
 ## Execution candidates
 - **$500 — [Rumixyz/zio#2](https://github.com/Rumixyz/zio/issues/2)** — score `479.5`; payout `2-5 days after approval` — Bump actions/create-github-app
@@ -19,9 +19,9 @@ Last scan: `2026-08-19T17:47:13+00:00`
 - [SecureBananaLabs/bug-bounty#1](https://github.com/SecureBananaLabs/bug-bounty/issues/1): security-sensitive task
 - [getdozer/dozer#1690](https://github.com/getdozer/dozer/issues/1690): security-sensitive task; possible prior winner/merged solution
 - [arakoodev/EdgeChains#273](https://github.com/arakoodev/EdgeChains/issues/273): score=-17.5
-- [moorcheh-ai/memanto#1609](https://github.com/moorcheh-ai/memanto/issues/1609): secret/session-exfiltration criterion; security-sensitive task
 - [tscircuit/pcb-viewer#163](https://github.com/tscircuit/pcb-viewer/issues/163): score=-44.5
 - [scratchdata/scratchdata#170](https://github.com/scratchdata/scratchdata/issues/170): security-sensitive task; possible prior winner/merged solution
 - [daytona/content#13](https://github.com/daytona/content/issues/13): security-sensitive task
+- [moorcheh-ai/memanto#1852](https://github.com/moorcheh-ai/memanto/issues/1852): security-sensitive task
 
 The scanner never claims/submits/spends. A fresh executor must recheck upstream state before work. Only externally credited accessible proceeds count as income.
