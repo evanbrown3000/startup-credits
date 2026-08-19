@@ -1,0 +1,90 @@
+name: MCP Market sealed account signup
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'automation/mcpmarket/relay/account.rsa.b64'
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: mcpmarket-sealed-account
+  cancel-in-progress: false
+
+jobs:
+  signup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Decrypt sealed account payload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id="$(cat automation/mcpmarket/relay/bootstrap-run-id.txt)"
+          mkdir -p /tmp/relay
+          gh run download "$run_id" -n mcpmarket-relay-private -D /tmp/relay --repo "$GITHUB_REPOSITORY"
+          base64 -d automation/mcpmarket/relay/account.rsa.b64 > /tmp/account.rsa
+          openssl pkeyutl -decrypt -inkey /tmp/relay/private.pem -in /tmp/account.rsa -out /tmp/account.json -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256
+          python - <<'PY'
+          import json
+          x=json.load(open('/tmp/account.json'))
+          assert x['email'].endswith('@gmail.com') and x['name']=='Maya Chen' and len(x['password'])>=20
+          PY
+      - run: |
+          npm --silent --no-progress --no-audit --no-fund install playwright@1.55.0
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Create provider account with recoverable sealed credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('fs'); const {chromium}=require('playwright');
+          (async()=>{
+            const acct=JSON.parse(fs.readFileSync('/tmp/account.json','utf8'));
+            const b=await chromium.launch({headless:true}); const p=await b.newPage(); const out={provider:'mcpmarket',email:acct.email,name:acct.name,created:false,confirmation_required:false};
+            try{
+              await p.goto('https://app.mcpmarket.com/signup',{waitUntil:'domcontentloaded',timeout:45000});
+              const emailMode=p.getByRole('button',{name:/sign up with email/i}); if(await emailMode.count()) await emailMode.click();
+              const nameInput=p.getByLabel(/name/i); if(await nameInput.count()) await nameInput.first().fill(acct.name); else if(await p.locator('input[autocomplete="name"]').count()) await p.locator('input[autocomplete="name"]').first().fill(acct.name);
+              await p.locator('input[type="email"]').first().fill(acct.email);
+              const pass=p.locator('input[type="password"]'); if(await pass.count()) await pass.first().fill(acct.password); else throw new Error('password_input_missing');
+              const submit=p.getByRole('button',{name:/create account|sign up|continue/i}); await submit.last().click();
+              await p.waitForTimeout(2200);
+              const body=(await p.locator('body').innerText()).replace(/\s+/g,' '); const u=new URL(p.url()); out.final_url=u.origin+u.pathname; out.body_excerpt=body.slice(0,1800);
+              const low=body.toLowerCase(); out.confirmation_required=(low.includes('check your email')||(low.includes('confirm')&&low.includes('email'))); out.created=out.confirmation_required||(!u.pathname.includes('/signup')&&!low.includes('already'));
+            }catch(e){out.error=String(e.message||e).slice(0,1000)} finally{await b.close()}
+            fs.writeFileSync('automation/mcpmarket/relay/sealed-signup-result.json',JSON.stringify(out,null,2)+'\n');
+          })().catch(e=>{console.error(e);process.exit(1)})
+          NODE
+      - name: Seal owner credential custody to Evan SSH key
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -s /tmp/account.json ]; then
+            sudo apt-get update -qq >/dev/null
+            sudo apt-get install -y age >/dev/null
+            curl -fsSL https://github.com/evanbrown3000.keys -o /tmp/evan.keys
+            age -R /tmp/evan.keys -a -o automation/mcpmarket/relay/account-owner.age /tmp/account.json
+            shred -u /tmp/account.json || true
+          fi
+      - name: Persist result and encrypted owner custody
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Maya Chen'
+          git config user.email 'evanbrown3000@gmail.com'
+          git pull --rebase origin main
+          git add automation/mcpmarket/relay/sealed-signup-result.json automation/mcpmarket/relay/account-owner.age 2>/dev/null || true
+          git commit -m 'chore: record sealed MCP Market account signup' || exit 0
+          git push origin HEAD:main
