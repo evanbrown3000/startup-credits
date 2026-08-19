@@ -1,0 +1,2 @@
+2026-08-19T11:10:00-05:00
+PR dry-run smoke after replacing disabled-Issues sink with rolling repository report.
