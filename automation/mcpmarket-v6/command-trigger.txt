@@ -1,0 +1,6 @@
+triggered_at=2026-08-19T16:37:10-05:00
+provider=mcpmarket.com
+product=Provider Reality Check
+price_usd=19
+head_sha=281a8ce4c62bff6b10744d63d6abf78ca6808c45
+mode=registered-main-push-title-verified-publication
