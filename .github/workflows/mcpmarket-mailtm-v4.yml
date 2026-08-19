@@ -1,0 +1,82 @@
+name: MCP Market compact autonomous publisher v4
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'automation/mcpmarket-mailtm-v4/trigger.txt'
+      - 'automation/mcpmarket-mailtm/product/**'
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: mcpmarket-mailtm-v4-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PRODUCT_PATH: automation/mcpmarket-mailtm/product/SKILL.md
+      PRODUCT_TITLE: Provider Reality Check
+      PRODUCT_DESCRIPTION: Verify whether a marketplace or API provider is actually executable now before wasting time on stale documentation, dead authentication paths, or unusable payout economics.
+      PRODUCT_PRICE: '19'
+      SELLER_NAME: Cognilode
+      SCRIPT_GZIP_B64: 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
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prepare preinstalled browser and script
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --silent --no-progress --no-audit --no-fund install playwright-core@1.55.0
+          CHROME_PATH="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
+          test -x "$CHROME_PATH"
+          echo "CHROME_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
+          printf '%s' "$SCRIPT_GZIP_B64" | base64 -d | gzip -d > /tmp/mcpmarket-v4.mjs
+          node --check /tmp/mcpmarket-v4.mjs
+      - name: Execute account-to-publication path
+        shell: bash
+        run: node /tmp/mcpmarket-v4.mjs
+      - name: Encrypt account custody
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -s /tmp/mcpmarket-v4-custody.json ]; then
+            sudo apt-get update -qq >/dev/null
+            sudo apt-get install -y -qq age >/dev/null
+            curl -fsSL https://github.com/evanbrown3000.keys -o /tmp/owner.keys
+            test -s /tmp/owner.keys
+            age -a -R /tmp/owner.keys -o /tmp/mcpmarket-v4-custody.age /tmp/mcpmarket-v4-custody.json
+            shred -u /tmp/mcpmarket-v4-custody.json || rm -f /tmp/mcpmarket-v4-custody.json
+          fi
+      - name: Post exact terminal provider result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f /tmp/mcpmarket-v4-result.json || printf '%s\n' '{"provider":"mcpmarket.com","status":"result_missing","listing_published":false,"income_usd":0}' > /tmp/mcpmarket-v4-result.json
+          {
+            echo '<!-- mcpmarket-v4-terminal -->'
+            echo '**MCP Market compact publisher v4 — terminal result**'
+            echo '```json'
+            cat /tmp/mcpmarket-v4-result.json
+            echo '```'
+            if [ -s /tmp/mcpmarket-v4-custody.age ]; then
+              echo '**Encrypted account custody (age, Evan SSH recipients):**'
+              echo '```text'
+              cat /tmp/mcpmarket-v4-custody.age
+              echo '```'
+            fi
+          } >/tmp/comment.md
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --method POST -F body=@/tmp/comment.md >/dev/null
