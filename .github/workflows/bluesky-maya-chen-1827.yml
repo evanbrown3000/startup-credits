@@ -1,0 +1,86 @@
+name: Maya Chen Bluesky launch 1827
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'automation/social/maya-chen-bsky-trigger.txt'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: maya-chen-bsky-1827
+  cancel-in-progress: false
+
+jobs:
+  launch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      HANDLE: maya-chen-tools-260819.bsky.social
+      EMAIL: evanbrown3000+maya.chen.bsky260819@gmail.com
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create account, profile, and first post
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p automation/social
+          pw="Mc!$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 24)9z"
+          printf '%s' "$pw" >/tmp/maya-bsky-password
+          python3 - <<'PY'
+          import json, os, urllib.request, urllib.error, datetime
+          base='https://bsky.social/xrpc/'
+          handle=os.environ['HANDLE']; email=os.environ['EMAIL']
+          pw=open('/tmp/maya-bsky-password').read()
+          out={'provider':'bluesky','handle':handle,'email':email,'created':False,'profile_written':False,'post_created':False}
+          def post(method, body, token=None):
+              data=json.dumps(body).encode()
+              req=urllib.request.Request(base+method,data=data,headers={'Content-Type':'application/json', **({'Authorization':'Bearer '+token} if token else {})},method='POST')
+              try:
+                  with urllib.request.urlopen(req,timeout=30) as r:
+                      return r.status, json.loads(r.read().decode() or '{}')
+              except urllib.error.HTTPError as e:
+                  raw=e.read().decode(errors='replace')
+                  try: obj=json.loads(raw)
+                  except: obj={'raw':raw[:1200]}
+                  return e.code,obj
+          status, acct=post('com.atproto.server.createAccount', {'email':email,'handle':handle,'password':pw})
+          out['create_http']=status; out['create_response']={k:v for k,v in acct.items() if k not in ('accessJwt','refreshJwt')}
+          if status < 300 and acct.get('accessJwt') and acct.get('did'):
+              out['created']=True; did=acct['did']; token=acct['accessJwt']; out['did']=did
+              now=datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00','Z')
+              profile={'repo':did,'collection':'app.bsky.actor.profile','rkey':'self','record':{'$type':'app.bsky.actor.profile','displayName':'Maya Chen','description':'Practical digital tools, small business experiments, and what actually works. Building in public. cognilode.com','createdAt':now}}
+              s,p=post('com.atproto.repo.putRecord',profile,token); out['profile_http']=s; out['profile_written']=s<300
+              text='Building practical digital tools and small business experiments in public. I care about what actually works, not hype. More: https://cognilode.com'
+              rec={'repo':did,'collection':'app.bsky.feed.post','record':{'$type':'app.bsky.feed.post','text':text,'createdAt':now}}
+              s,p=post('com.atproto.repo.createRecord',rec,token); out['post_http']=s; out['post_created']=s<300
+              if isinstance(p,dict):
+                  out['post_uri']=p.get('uri'); out['post_cid']=p.get('cid')
+          open('automation/social/maya-chen-bsky-result.json','w').write(json.dumps(out,indent=2)+'\n')
+          PY
+      - name: Encrypt password custody
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f /tmp/maya-bsky-password ]; then
+            sudo apt-get update -qq >/dev/null
+            sudo apt-get install -y age >/dev/null
+            curl -fsSL https://github.com/evanbrown3000.keys -o /tmp/recipients.txt
+            age -R /tmp/recipients.txt -a -o automation/social/maya-chen-bsky-password.age /tmp/maya-bsky-password
+            shred -u /tmp/maya-bsky-password || rm -f /tmp/maya-bsky-password
+          fi
+      - name: Persist public state and encrypted custody
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Maya Chen'
+          git config user.email 'evanbrown3000@gmail.com'
+          git pull --rebase origin main
+          git add automation/social/maya-chen-bsky-result.json automation/social/maya-chen-bsky-password.age 2>/dev/null || true
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'feat: record Maya Chen Bluesky launch'
+          git push origin HEAD:main
