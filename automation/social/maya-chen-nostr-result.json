@@ -1,0 +1,57 @@
+{
+  "provider": "nostr",
+  "name": "Maya Chen",
+  "npub": "npub1fqqnva6pll6r2l6mj7zxg49ye4as84tu7ea6f2amj2f64us7p04sgwxeac",
+  "pubkey": "4801367741fff4357f5b97846454a4cd7b03d57cf67ba4abbb9293aaf21e0beb",
+  "profile_event_id": "d7207eb2a1945aaa1adb02973d2407fe0be92b53eec34bf9e55fe16ef63fffec",
+  "post_event_id": "117962f4c37c251e7c2b516090ecb20aef42fa080f36b3b093bd96db849ea6dc",
+  "accepted_relays": [
+    "wss://relay.damus.io",
+    "wss://nos.lol",
+    "wss://relay.primal.net"
+  ],
+  "relay_results": [
+    {
+      "url": "wss://relay.damus.io",
+      "ok": {
+        "d7207eb2a1945aaa1adb02973d2407fe0be92b53eec34bf9e55fe16ef63fffec": {
+          "accepted": true,
+          "message": ""
+        },
+        "117962f4c37c251e7c2b516090ecb20aef42fa080f36b3b093bd96db849ea6dc": {
+          "accepted": true,
+          "message": ""
+        }
+      }
+    },
+    {
+      "url": "wss://nos.lol",
+      "ok": {
+        "d7207eb2a1945aaa1adb02973d2407fe0be92b53eec34bf9e55fe16ef63fffec": {
+          "accepted": true,
+          "message": ""
+        },
+        "117962f4c37c251e7c2b516090ecb20aef42fa080f36b3b093bd96db849ea6dc": {
+          "accepted": true,
+          "message": ""
+        }
+      }
+    },
+    {
+      "url": "wss://relay.primal.net",
+      "ok": {
+        "d7207eb2a1945aaa1adb02973d2407fe0be92b53eec34bf9e55fe16ef63fffec": {
+          "accepted": true,
+          "message": "duplicate: have this event"
+        },
+        "117962f4c37c251e7c2b516090ecb20aef42fa080f36b3b093bd96db849ea6dc": {
+          "accepted": true,
+          "message": ""
+        }
+      }
+    }
+  ],
+  "profile_published": true,
+  "post_published": true,
+  "website": "https://cognilode.com"
+}
