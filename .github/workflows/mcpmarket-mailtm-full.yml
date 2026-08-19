@@ -1,0 +1,322 @@
+name: MCP Market autonomous mailbox-to-publication
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'automation/mcpmarket-mailtm/trigger.txt'
+      - 'automation/mcpmarket-mailtm/product/**'
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: mcpmarket-mailtm-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Use preinstalled Chrome
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --silent --no-progress --no-audit --no-fund install playwright-core@1.55.0
+          CHROME_PATH="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
+          test -x "$CHROME_PATH"
+          echo "CHROME_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
+      - name: Create durable API mailbox, confirm account, and publish paid skill
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const { chromium } = require('playwright-core');
+          const crypto = require('crypto');
+          const fs = require('fs');
+
+          const PRODUCT_PATH = 'automation/mcpmarket-mailtm/product/SKILL.md';
+          const TITLE = 'Provider Reality Check';
+          const DESCRIPTION = 'Verify whether a marketplace or API provider is actually executable now before wasting time on stale documentation, dead auth paths, or unusable payout economics.';
+          const PRICE = '19';
+          const compact = (s,n=3600) => String(s||'').replace(/\s+/g,' ').trim().slice(0,n);
+          const redactUrl = (u) => {
+            try {
+              const x=new URL(String(u));
+              for(const k of [...x.searchParams.keys()]) if(/token|code|access|refresh|secret/i.test(k)) x.searchParams.set(k,'[redacted]');
+              if(x.hash) x.hash='#[redacted]';
+              return x.toString();
+            } catch(_) { return compact(u,500); }
+          };
+          const randomSecret = (prefix='X') => `${prefix}!${crypto.randomBytes(30).toString('base64url')}9a`;
+          async function api(url, options={}) {
+            const res=await fetch(url,options);
+            const raw=await res.text();
+            let data; try{data=raw?JSON.parse(raw):{}}catch(_){data={raw:raw.slice(0,1800)}}
+            if(!res.ok) throw new Error(`HTTP ${res.status} ${url}: ${raw.slice(0,500)}`);
+            return data;
+          }
+          async function snap(page,label) {
+            return {
+              label,
+              url:redactUrl(page.url()),
+              title:await page.title().catch(()=>''),
+              body:compact(await page.locator('body').innerText().catch(()=>'')),
+              buttons:(await page.getByRole('button').allTextContents().catch(()=>[])).slice(0,80),
+              links:(await page.locator('a').evaluateAll(es=>es.slice(0,120).map(e=>({text:(e.innerText||'').trim().slice(0,120),href:e.href}))).catch(()=>[])).map(x=>({text:x.text,href:redactUrl(x.href)})),
+              inputs:(await page.locator('input,textarea,select').evaluateAll(es=>es.slice(0,90).map(e=>({tag:e.tagName,type:e.type||'',name:e.name||'',placeholder:e.placeholder||'',accept:e.accept||''}))).catch(()=>[]))
+            };
+          }
+          async function click(page, regexes) {
+            for(const regex of regexes) {
+              for(const loc of [page.getByRole('button',{name:regex}),page.getByRole('link',{name:regex})]) {
+                try { if(await loc.count()){await loc.last().click({timeout:7000});return true;} } catch(_) {}
+              }
+            }
+            return false;
+          }
+          async function fill(page, regexes, value) {
+            for(const regex of regexes) {
+              for(const loc of [page.getByLabel(regex),page.getByPlaceholder(regex)]) {
+                try { if(await loc.count()){await loc.first().fill(String(value));return true;} } catch(_) {}
+              }
+            }
+            return false;
+          }
+          async function fillMeta(page, regex, value) {
+            const nodes=page.locator('input,textarea');
+            for(let i=0;i<await nodes.count();i++) {
+              const node=nodes.nth(i);
+              const meta=((await node.getAttribute('name'))||'')+' '+((await node.getAttribute('placeholder'))||'')+' '+((await node.getAttribute('aria-label'))||'');
+              if(regex.test(meta)) { try{await node.fill(String(value));return true;}catch(_){} }
+            }
+            return false;
+          }
+          function extractLinks(text) {
+            const decoded=String(text||'').replace(/&amp;/g,'&').replace(/&#x3D;/gi,'=').replace(/&#61;/g,'=');
+            return [...new Set((decoded.match(/https?:\/\/[^\s"'<>]+/g)||[]).map(x=>x.replace(/[),.;]+$/,'')))];
+          }
+
+          (async()=>{
+            const out={
+              provider:'mcpmarket.com',
+              product:TITLE,
+              price_usd:Number(PRICE),
+              mailbox_provider:'mail.tm',
+              mailbox_created:false,
+              account_created:false,
+              confirmation_received:false,
+              email_confirmed:false,
+              authenticated:false,
+              seller_onboarding:false,
+              skill_uploaded:false,
+              listing_published:false,
+              public_url:null,
+              public_readback:false,
+              income:0,
+              status:'started',
+              snapshots:[]
+            };
+            let mailboxAddress='',mailboxPassword='',mailboxId='',mailToken='',providerPassword='';
+            const browser=await chromium.launch({executablePath:process.env.CHROME_PATH,headless:true,args:['--no-sandbox']});
+            const context=await browser.newContext({viewport:{width:1440,height:1000}});
+            const page=await context.newPage();
+            try {
+              const domains=await api('https://api.mail.tm/domains?page=1');
+              const domain=(domains['hydra:member']||[]).find(d=>d.isActive!==false && d.isPrivate!==true);
+              if(!domain?.domain) throw new Error('mail.tm returned no active public domain');
+              mailboxAddress=`cognilode-${Date.now()}-${crypto.randomBytes(4).toString('hex')}@${domain.domain}`;
+              mailboxPassword=randomSecret('Mailbox');
+              const account=await api('https://api.mail.tm/accounts',{
+                method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({address:mailboxAddress,password:mailboxPassword})
+              });
+              mailboxId=account.id||'';
+              const token=await api('https://api.mail.tm/token',{
+                method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({address:mailboxAddress,password:mailboxPassword})
+              });
+              mailToken=token.token||'';
+              if(!mailToken) throw new Error('mail.tm token missing');
+              out.mailbox_created=true;
+              out.account_email=mailboxAddress;
+
+              providerPassword=randomSecret('Provider');
+              await page.goto('https://app.mcpmarket.com/signup',{waitUntil:'domcontentloaded',timeout:45000});
+              await page.getByRole('button',{name:/^sign up with email$/i}).click({timeout:12000});
+              const nameInput=page.getByLabel(/^name$/i);
+              if(await nameInput.count()) await nameInput.fill('Evan Brown'); else await page.getByPlaceholder(/your name/i).fill('Evan Brown');
+              await page.locator('input[type=email]').fill(mailboxAddress);
+              await page.locator('input[type=password]').fill(providerPassword);
+              const create=page.getByRole('button',{name:/^create account$/i});
+              if(await create.count()) await create.last().click({timeout:12000}); else await page.locator('form button[type=submit]').last().click({timeout:12000});
+              await page.waitForTimeout(2200);
+              let body=compact(await page.locator('body').innerText());
+              out.snapshots.push(await snap(page,'signup-result'));
+              if(/check your email|confirmation link|verify your email/i.test(body)) out.account_created=true;
+              else throw new Error(`MCP Market signup did not reach confirmation state: ${body.slice(0,700)}`);
+
+              let confirmUrl=null;
+              const deadline=Date.now()+150000;
+              while(Date.now()<deadline && !confirmUrl) {
+                const list=await api('https://api.mail.tm/messages?page=1',{headers:{Authorization:`Bearer ${mailToken}`}});
+                const messages=list['hydra:member']||[];
+                for(const m of messages) {
+                  const full=await api(`https://api.mail.tm/messages/${m.id}`,{headers:{Authorization:`Bearer ${mailToken}`}});
+                  const material=[full.subject,full.intro,full.text,Array.isArray(full.html)?full.html.join('\n'):full.html].filter(Boolean).join('\n');
+                  const candidates=extractLinks(material);
+                  confirmUrl=candidates.find(u=>/supabase\.co\/auth\/v1\/verify|token_hash=|type=signup|app\.mcpmarket\.com\/auth\/callback/i.test(u))||null;
+                  if(confirmUrl) break;
+                }
+                if(!confirmUrl) await new Promise(r=>setTimeout(r,3000));
+              }
+              if(!confirmUrl) throw new Error('confirmation message did not arrive in API mailbox within 150 seconds');
+              out.confirmation_received=true;
+
+              await page.goto(confirmUrl,{waitUntil:'domcontentloaded',timeout:45000});
+              await page.waitForTimeout(1800);
+              body=compact(await page.locator('body').innerText());
+              out.email_confirmed=!/invalid|expired|unable to verify|error/i.test(body);
+              out.snapshots.push(await snap(page,'confirmation-result'));
+              if(!out.email_confirmed) throw new Error(`confirmation link rejected: ${body.slice(0,700)}`);
+
+              await page.goto('https://app.mcpmarket.com/login',{waitUntil:'domcontentloaded',timeout:45000});
+              await page.getByRole('button',{name:/^log in with email$/i}).click({timeout:12000});
+              await page.locator('input[type=email]').fill(mailboxAddress);
+              await page.locator('input[type=password]').fill(providerPassword);
+              const login=page.getByRole('button',{name:/^log in$/i});
+              if(await login.count()) await login.last().click({timeout:12000}); else await page.locator('form button[type=submit]').last().click({timeout:12000});
+              await page.waitForTimeout(2400);
+              body=compact(await page.locator('body').innerText());
+              out.authenticated=!page.url().includes('/login')&&!/invalid.*password|welcome back/i.test(body);
+              out.snapshots.push(await snap(page,'post-login'));
+              if(!out.authenticated) throw new Error(`login failed: ${body.slice(0,700)}`);
+
+              await page.goto('https://app.mcpmarket.com/sell?source=sell-page',{waitUntil:'domcontentloaded',timeout:45000});
+              await page.waitForTimeout(1600);
+              out.snapshots.push(await snap(page,'seller-entry'));
+
+              for(let step=0;step<20;step++) {
+                body=compact(await page.locator('body').innerText());
+                const lower=body.toLowerCase();
+                if(/published|listing is live|view public page|live paid/i.test(lower)) { out.listing_published=true;break; }
+
+                if(/organization|workspace/.test(lower)) {
+                  await fill(page,[/organization name|workspace name/i],'Cognilode');
+                  await fill(page,[/slug|handle/i],'cognilode');
+                  await fillMeta(page,/organization|workspace|name/i,'Cognilode');
+                  await fillMeta(page,/slug|handle/i,'cognilode');
+                  if(await click(page,[/^create organization$|^create workspace$|^continue$|^next$/i])) {
+                    out.seller_onboarding=true;await page.waitForTimeout(1400);out.snapshots.push(await snap(page,`organization-${step}`));continue;
+                  }
+                }
+
+                if(/storefront|seller profile|start selling|set up.*store/.test(lower)) {
+                  await fill(page,[/display name|seller name/i],'Cognilode');
+                  await fill(page,[/handle|username|slug/i],'cognilode');
+                  await fill(page,[/bio|about|description/i],'Evidence-driven agent skills for commercial execution and provider validation.');
+                  if(await click(page,[/^start selling$|^set up.*store$|^create.*seller$|^save$|^continue$|^next$/i])) {
+                    out.seller_onboarding=true;await page.waitForTimeout(1400);out.snapshots.push(await snap(page,`seller-${step}`));continue;
+                  }
+                }
+
+                if(/connect stripe|payout|payments setup/i.test(lower)) {
+                  if(await click(page,[/^skip for now$|^do this later$|^continue without payouts$/i])) {
+                    await page.waitForTimeout(1200);out.snapshots.push(await snap(page,`payout-skip-${step}`));continue;
+                  }
+                }
+
+                const fileInput=page.locator('input[type=file]');
+                if(await fileInput.count()) {
+                  await fileInput.first().setInputFiles(PRODUCT_PATH);
+                  out.skill_uploaded=true;
+                  await page.waitForTimeout(1400);
+                  out.snapshots.push(await snap(page,`skill-uploaded-${step}`));
+                } else if(await click(page,[/^upload.*skill$|^new skill$|^create skill$|^add skill$|^import skill$|^connect skill$/i])) {
+                  await page.waitForTimeout(1400);out.snapshots.push(await snap(page,`open-upload-${step}`));continue;
+                }
+
+                await fill(page,[/skill name|listing title|title/i],TITLE);
+                await fill(page,[/description|summary/i],DESCRIPTION);
+                await fill(page,[/price|amount/i],PRICE);
+                await fillMeta(page,/title|skill.*name|listing.*name/i,TITLE);
+                await fillMeta(page,/description|summary/i,DESCRIPTION);
+                await fillMeta(page,/price|amount/i,PRICE);
+
+                if(await click(page,[/^publish$|^go live$|^create listing$|^save and publish$|^list skill$|^continue$|^next$|^save$/i])) {
+                  await page.waitForTimeout(2000);out.snapshots.push(await snap(page,`advance-${step}`));continue;
+                }
+                break;
+              }
+
+              body=compact(await page.locator('body').innerText());
+              out.listing_published=out.listing_published||(/published|listing is live|view public page|live paid/i.test(body)&&!/not published|error/i.test(body));
+              const links=await page.locator('a').evaluateAll(es=>es.map(e=>({text:(e.innerText||'').trim(),href:e.href})));
+              const candidate=links.find(x=>/view public page|public listing|storefront/i.test(x.text))||links.find(x=>/mcpmarket\.com\/@|\/tools\/skills\//.test(x.href));
+              out.public_url=candidate?candidate.href:null;
+              out.snapshots.push(await snap(page,'seller-terminal'));
+
+              if(out.public_url) {
+                const publicContext=await browser.newContext({viewport:{width:1440,height:1000}});
+                const publicPage=await publicContext.newPage();
+                const res=await publicPage.goto(out.public_url,{waitUntil:'domcontentloaded',timeout:45000});
+                await publicPage.waitForTimeout(1000);
+                const publicBody=compact(await publicPage.locator('body').innerText());
+                out.public_readback=Boolean(res&&res.status()<400&&/provider reality check/i.test(publicBody));
+                out.snapshots.push(await snap(publicPage,'unauthenticated-public-readback'));
+                await publicContext.close();
+              }
+              out.status=out.listing_published?(out.public_readback?'published_publicly_verified':'published_public_readback_unverified'):'publish_incomplete';
+            } catch(e) {
+              out.status='error';
+              out.error=String(e.message||e).slice(0,1100);
+              try{out.snapshots.push(await snap(page,'error-terminal'))}catch(_){}
+            } finally {
+              const custody={mailbox_provider:'mail.tm',mailbox_address:mailboxAddress,mailbox_password:mailboxPassword,mailbox_account_id:mailboxId,provider:'mcpmarket.com',provider_email:mailboxAddress,provider_password:providerPassword,public_url:out.public_url,created_at:new Date().toISOString()};
+              fs.writeFileSync('/tmp/mcpmarket-custody.json',JSON.stringify(custody,null,2)+'\n',{mode:0o600});
+              fs.writeFileSync('/tmp/mcpmarket-result.json',JSON.stringify(out,null,2)+'\n');
+              await browser.close();
+            }
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - name: Encrypt durable account custody to owner keys
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -s /tmp/mcpmarket-custody.json ]; then
+            sudo apt-get update -qq >/dev/null
+            sudo apt-get install -y -qq age >/dev/null
+            curl -fsSL https://github.com/evanbrown3000.keys -o /tmp/owner.keys
+            test -s /tmp/owner.keys
+            age -a -R /tmp/owner.keys -o /tmp/mcpmarket-custody.age /tmp/mcpmarket-custody.json
+            shred -u /tmp/mcpmarket-custody.json || rm -f /tmp/mcpmarket-custody.json
+          fi
+      - name: Post terminal provider result and encrypted custody
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f /tmp/mcpmarket-result.json || printf '%s\n' '{"provider":"mcpmarket.com","status":"result_missing","listing_published":false,"income":0}' >/tmp/mcpmarket-result.json
+          {
+            echo '<!-- mcpmarket-mailtm-terminal -->'
+            echo '**MCP Market autonomous mailbox-to-publication — terminal result**'
+            echo '```json'
+            cat /tmp/mcpmarket-result.json
+            echo '```'
+            if [ -s /tmp/mcpmarket-custody.age ]; then
+              echo '**Encrypted account custody (age, Evan SSH recipients):**'
+              echo '```text'
+              cat /tmp/mcpmarket-custody.age
+              echo '```'
+            fi
+          } >/tmp/comment.md
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --method POST -F body=@/tmp/comment.md >/dev/null
