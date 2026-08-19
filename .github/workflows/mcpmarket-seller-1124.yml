@@ -12,6 +12,8 @@ on:
 
 permissions:
   contents: write
+  issues: write
+  pull-requests: write
 
 concurrency:
   group: mcpmarket-seller-1124
@@ -95,6 +97,24 @@ jobs:
             fs.writeFileSync('automation/mcpmarket/result.json', JSON.stringify(out,null,2)+'\n');
           })().catch(e => { console.error('runner_error:', e.message); process.exit(1); });
           NODE
+      - name: Publish redacted provider result to PR
+        if: always() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f automation/mcpmarket/result.json || printf '%s\n' '{"provider":"mcpmarket","status":"result_missing_after_signup_step","provider_mutation":false}' > automation/mcpmarket/result.json
+          BODY_FILE="$(mktemp)"
+          {
+            printf '%s\n' '<!-- mcpmarket-seller-result -->'
+            printf '%s\n' '**MCP Market seller carrier — redacted terminal result**'
+            printf '%s\n\n' '```json'
+            cat automation/mcpmarket/result.json
+            printf '%s\n' '```'
+          } > "$BODY_FILE"
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --method POST -F body=@"$BODY_FILE"
       - name: Encrypt generated credential to owner SSH key
         if: always()
         shell: bash
@@ -108,7 +128,7 @@ jobs:
             age -R /tmp/recipients.txt -a -o automation/mcpmarket/password.age /tmp/mcpmarket-password
             shred -u /tmp/mcpmarket-password || rm -f /tmp/mcpmarket-password
           fi
-      - name: Persist redacted result and encrypted custody
+      - name: Persist encrypted custody and redacted result when possible
         if: always()
         shell: bash
         run: |
