@@ -1,0 +1,79 @@
+name: MCP Market autonomous seller publication v3
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'automation/mcpmarket-v3/trigger.txt'
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: mcpmarket-autonomous-v3
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Use preinstalled Chrome
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --silent --no-progress --no-audit --no-fund install playwright-core@1.55.0
+          CHROME_PATH="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
+          test -x "$CHROME_PATH"
+          echo "CHROME_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
+      - name: Create account, confirm, onboard, and publish
+        shell: bash
+        env:
+          SCRIPT_GZIP_B64: "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"
+        run: |
+          set -euo pipefail
+          printf '%s' "$SCRIPT_GZIP_B64" | base64 -d | gzip -d > /tmp/mcpmarket-v3.js
+          node --check /tmp/mcpmarket-v3.js
+          node /tmp/mcpmarket-v3.js
+      - name: Encrypt custody to owner keys
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -s /tmp/mcpmarket-custody.json ]; then
+            sudo apt-get update -qq >/dev/null
+            sudo apt-get install -y -qq age >/dev/null
+            curl -fsSL https://github.com/evanbrown3000.keys -o /tmp/owner.keys
+            test -s /tmp/owner.keys
+            age -a -R /tmp/owner.keys -o /tmp/mcpmarket-custody.age /tmp/mcpmarket-custody.json
+            shred -u /tmp/mcpmarket-custody.json || rm -f /tmp/mcpmarket-custody.json
+          fi
+      - name: Post terminal result and encrypted custody
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f /tmp/mcpmarket-result.json || printf '%s\n' '{"provider":"mcpmarket.com","status":"result_missing","listing_published":false,"income":0}' >/tmp/mcpmarket-result.json
+          {
+            echo '<!-- mcpmarket-v3-terminal -->'
+            echo '**MCP Market autonomous seller publication v3 — terminal result**'
+            echo '```json'
+            cat /tmp/mcpmarket-result.json
+            echo '```'
+            if [ -s /tmp/mcpmarket-custody.age ]; then
+              echo '**Encrypted account custody (age; Evan GitHub SSH recipients):**'
+              echo '```text'
+              cat /tmp/mcpmarket-custody.age
+              echo '```'
+            fi
+          } >/tmp/comment.md
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --method POST -F body=@/tmp/comment.md >/dev/null
