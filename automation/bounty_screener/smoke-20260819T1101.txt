@@ -1,2 +1,0 @@
-2026-08-19T11:01:00-05:00
-Public fallback smoke: consume fresh redacted peer lease and create/update rolling issue without independent discovery.
