@@ -2,7 +2,7 @@
 # Funded bounty screener — rolling state
 
 **Mode: INDEPENDENT_FALLBACK — peer lease stale/missing.**
-Last scan: `2026-08-20T21:19:31+00:00`
+Last scan: `2026-08-20T21:49:31+00:00`
 
 ## Execution candidates
 - **$500 — [Rumixyz/zio#2](https://github.com/Rumixyz/zio/issues/2)** — score `479.5`; payout `2-5 days after approval` — Bump actions/create-github-app
